@@ -1,0 +1,11 @@
+*.zip
+node_modules/
+__pycache__/
+*.pyc
+test-output/
+tests/*.png
+tests/*.pdf
+tests/*.pptx
+*.bak
+*backup*
+.DS_Store
