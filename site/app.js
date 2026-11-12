@@ -54,7 +54,7 @@
     setTimeout(() => {
       const t0 = performance.now(), m = motifAndLock();
       st.cands = M.findFixes(m.motif, { stretch: $('stretch').checked, keep: 3, lock: m.lock, extra: m.extra });
-      st.cands.forEach(r => { r.Y = r.F.map((x, i) => x.map((v, c) => (r.E ? r.E[i][c] : 0))); r.Y0 = r.Y.map(x => x.slice()); r.F0 = r.F.map(x => x.slice()); r.mine = r.L ? r.L.map(x => x.slice()) : r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
+      st.cands.forEach(r => { r.G = r.F.map(x => x.map(() => 0)); r.Y = r.F.map((x, i) => x.map((v, c) => (r.E ? r.E[i][c] : 0))); r.Y0 = r.Y.map(x => x.slice()); r.F0 = r.F.map(x => x.slice()); r.mine = r.L ? r.L.map(x => x.slice()) : r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
       const box = $('cands'); box.innerHTML = '';
       if (!st.cands.length) { $('status').textContent = 'No workable fix found.'; return; }
       st.cands.forEach((r, k) => {
@@ -79,8 +79,10 @@
   const visRGB = r => (i, c) => { const s = i + 1 < r.F.length && r.X[i + 1][c] ? i + 1 : i; return r.Y && r.Y[s][c] ? C.hexToRgb(st.extraHex[r.Y[s][c] - 1]) : rowRGB(s + 1); };
   const carryTag = r => (hasY(r) ? row => [...new Set(r.Y[row - 1].filter(v => v))].sort().map(k => '+' + 'CD'[k - 1]).join('') : null);
   const extraLegend = r => (hasY(r) ? [1, 2].filter(k => r.Y.some(x => x.includes(k))).map(k => ({ hex: st.extraHex[k - 1], rgb: C.hexToRgb(st.extraHex[k - 1]), text: `${st.extraHex[k - 1].toUpperCase()}  ·  ${'CD'[k - 1]} (carried strand, shaded squares)` })) : []);
-  const dirOpts = r => (hasY(r) ? { Y: r.Y, extras: extras() } : {});
-  function chartOpts(r, extra) { return Object.assign({ cell: r.width > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(r), carry: carryTag(r) }, extra); }
+  const hasG = r => r.G && r.G.some(x => x.some(v => v));
+  const dirOpts = r => Object.assign(hasY(r) ? { Y: r.Y, extras: extras() } : {}, hasG(r) ? { G: r.G } : {});
+  const leanFn = r => (hasG(r) ? (i, c) => M.leanAt(r.G, i, c) : null);
+  function chartOpts(r, extra) { return Object.assign({ cell: r.width > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(r), carry: carryTag(r), groups: hasG(r) ? r.G : null }, extra); }
   function show(resetPlan) {
     const r = st.cands[st.sel]; $('outSec').classList.remove('hidden');
     if (resetPlan) { st.plan = C.defaultPlan(); st.selRow = null; $('colorNote').textContent = '';
@@ -91,7 +93,7 @@
       if (row < 1 || row > g.H) return; st.selRow = row; $('colorNote').textContent = `Row ${row} selected (${C.yarnOf(row)} yarn, now ${C.hexAt(st.plan, row)}). Tap a color.`; show(); };
     const fab = M.simulate(r.X), H = fab.length;
     replace('fabCv', Rn.drawGrid(fab, { cell: Math.max(4, Math.min(16, Math.floor(500 / r.width))), cellRGB: visRGB(r) }));
-    replace('prevCv', Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r) }));
+    replace('prevCv', Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r), lean: leanFn(r) }));
     drawSt(); drawBank(); $('written').textContent = window.MosaicWritten.directions(r.X, st.plan, dirOpts(r));
     $('summary').textContent = `${r.width + 2} stitches (incl. BS) × ${r.rows} rows + chain. ${r.X.flat().reduce((a, b) => a + b, 0)} X's.`;
   }
@@ -140,7 +142,7 @@
   $('pdfForm').onsubmit = async ev => { ev.preventDefault(); const title = $('pdfTitle').value.trim(); if (!title) { $('pdfNote').textContent = 'Please type a title.'; return; }
     $('pdfNote').textContent = 'Making PDF…';
     try { const r = st.cands[st.sel], names = {}; document.querySelectorAll('#pdfColors input').forEach(i => names[i.dataset.key] = i.value);
-      const pv = Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r), noLabel: true });
+      const pv = Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r), lean: leanFn(r), noLabel: true });
       const doc = window.MosaicPDF.build({ X: r.X, F: r.F, plan: st.plan, ...dirOpts(r), title, names, notes: $('pdfNotes').value, ideas: $('pdfIdeas').value, project: $('pdfProject').value, border: $('pdfBorder').value,
         logo: await getLogo(), preview: pv.toDataURL('image/png'), previewW: pv.width, previewH: pv.height });
       doc.save(window.MosaicPDF.fileName(title)); $('pdfDlg').close(); }
@@ -268,20 +270,23 @@
 
   // After converting: edit the finished look; X's are recalculated from it
   const cur = () => st.cands[st.sel];
-  const snap = r => ({ F: r.F.map(x => x.slice()), mine: r.mine.map(x => x.slice()), auto: r.auto.map(x => x.slice()), Y: r.Y.map(x => x.slice()) });
+  const snap = r => ({ F: r.F.map(x => x.slice()), mine: r.mine.map(x => x.slice()), auto: r.auto.map(x => x.slice()), Y: r.Y.map(x => x.slice()), G: r.G.map(x => x.slice()) });
   const stRGB = r => (i, c, v) => rowRGB(v === M.color(i + 1) ? i + 1 : i + 2);
   function drawSt() {
     const r = cur(), H = r.F.length, pr = M.problemCells(r.F), get = stRGB(r);
-    const vis = visRGB(r), cv = Rn.drawEdit(r.F, { cell: Math.max(6, Math.min(22, Math.floor(560 / Math.max(r.width, H)))), cellRGB: (i, c) => vis(i, c), bad: pr.bad, mine: r.mine, auto: r.auto });
+    const vis = visRGB(r), cv = Rn.drawEdit(r.F, { cell: Math.max(6, Math.min(22, Math.floor(560 / Math.max(r.width, H)))), cellRGB: (i, c) => vis(i, c), bad: pr.bad, mine: r.mine, auto: r.auto, groups: r.G });
     replace('stCv', cv); applyZoom(cv, st.stZoom);
-    if (st.stEdit && st.stTool !== 'ab') { const want = st.stTool; let hitDc = false;   // paint stitches with C / D (or back to the row's yarn)
+    if (st.stEdit && typeof st.stTool === 'number') { const want = st.stTool; let hitDc = false;   // paint stitches with C / D (or back to the row's yarn)
       paintable(cv, () => r.hist.push(snap(r)),
         (k, c) => { const i = H - 1 - k, s = i + 1 < H && r.X[i + 1][c] ? i + 1 : i; if (r.Y[s][c] === want) return; r.Y[s][c] = want;
+          const gp = groupOf(r, s, c); if (gp) M.groupCols(r.G, gp.i, gp.b).forEach(q => { r.Y[gp.i][q] = want; });   // a leaning group is worked in one yarn
           const rows = r.X[s][c] ? [s, s - 1] : [s]; if (r.X[s][c]) hitDc = true;
           rows.forEach(q => { if (q >= 0) fillCell(cv, H - 1 - q, c, vis(q, c)); }); },
         () => { const h = r.hist[r.hist.length - 1]; if (h && JSON.stringify(h.Y) === JSON.stringify(r.Y)) r.hist.pop();
           stChanged(hitDc ? `Part of what you painted is a dc, so <b>both squares it shows in</b> changed: the dc and the square it covers below. That keeps every switch a real stitch.` : null); });
     }
+    if (st.stEdit && /^g/.test(st.stTool)) { const bits = +st.stTool[1];   // leaning stitches: tap the straight dc
+      paintable(cv, () => {}, (k, c, first) => { if (!first) return; const i = H - 1 - k; groupTap(r, i, c, bits); }, () => {}); }
     if (st.stEdit && st.stTool === 'ab') { let val = null;
       paintable(cv, () => { r.hist.push(snap(r)); val = null; },
         (k, c, first) => { const i = H - 1 - k; if (first) val = 1 - r.F[i][c]; if (r.F[i][c] === val) return;
@@ -292,19 +297,37 @@
     if (!$('stNote').dataset.keep) $('stNote').innerHTML = pr.n
       ? `<b class="warn">✘ ${pr.n} red square${pr.n > 1 ? 's' : ''} can't be worked.</b> In each column, a square that shows the other row's color can't sit right above another one, or in the top row. Tap “Fix around my edits” to adjust the stitches next to them, or keep editing.`
       : (edits ? `<b class="ok">✔ Workable.</b> ${edits} square${edits > 1 ? 's' : ''} edited by hand.` : (st.stEdit ? (st.stTool === 'ab' ? 'Tap or drag on a square to switch it between A and B.'
+        : /^g/.test(st.stTool) ? (st.stTool === 'g0' ? 'Tap a leaning group to take it out.' : `Tap a dc (its square or the square it covers) to make it the straight stitch of a ${{ g1: '\\|', g2: '|/', g3: '\\|/' }[st.stTool]} group. The ${{ g1: 'stitch to its left leans', g2: 'stitch to its right leans', g3: 'stitches on both sides lean' }[st.stTool]} into the same stitch two rows down.`)
         : st.stTool ? `Tap or drag to work stitches in ${'CD'[st.stTool - 1]}. A dc shows in two squares (its own and the one it covers), so both change together.` : 'Tap or drag over C / D squares to work them in the row\'s own yarn again.') : ''));
     delete $('stNote').dataset.keep;
   }
-  function stChanged(note) { const r = cur(); r.X = M.check(r.F).X; if (note) { $('stNote').innerHTML = note; $('stNote').dataset.keep = 1; } show(); }
+  function stChanged(note) { const r = cur(); r.X = M.check(r.F).X;
+    const lost = r.G ? M.cleanGroups(r.X, r.G) : 0;
+    if (lost) note = (note ? note + ' ' : '') + `${lost} leaning group${lost > 1 ? 's' : ''} came out because the stitches under ${lost > 1 ? 'them' : 'it'} changed. Tap Undo to bring ${lost > 1 ? 'them' : 'it'} back.`; if (note) { $('stNote').innerHTML = note; $('stNote').dataset.keep = 1; } show(); }
   $('stEdit').onclick = () => { st.stEdit = !st.stEdit; $('stEdit').classList.toggle('on', st.stEdit); drawSt(); };
   $('stUndo').onclick = () => { const r = cur(), h = r.hist.pop(); if (!h) return; Object.assign(r, h); stChanged(); };
-  $('stReset').onclick = () => { const r = cur(); if (!r.hist.length) return; r.hist.push(snap(r)); r.F = r.F0.map(x => x.slice()); r.Y = r.Y0.map(x => x.slice());
+  $('stReset').onclick = () => { const r = cur(); if (!r.hist.length) return; r.hist.push(snap(r)); r.F = r.F0.map(x => x.slice()); r.Y = r.Y0.map(x => x.slice()); r.G = r.F.map(x => x.map(() => 0));
     r.mine = r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); stChanged('Back to the original chart. Tap Undo to bring your edits back.'); };
   $('stFix').onclick = () => { const r = cur(), res = M.refix(r.F, r.mine); if (!res) return;
     r.hist.push(snap(r)); r.auto = r.F.map((row, i) => row.map((v, c) => (v !== res.F[i][c] ? 1 : r.auto[i][c]))); res.F.forEach((row, i) => row.forEach((v, c) => { if (v !== r.F[i][c]) r.mine[i][c] = 0; }));
     r.F = res.F;
     stChanged(`<b class="ok">✔ Workable.</b> Adjusted ${res.changed} square${res.changed === 1 ? '' : 's'} (outlined orange)` + (res.lockedChanged ? `, including ${res.lockedChanged} of your own edits that couldn't be worked as drawn.` : '; all your edits were kept.') + ' Tap Undo if you don\'t like it.'); };
-  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { const v = b.dataset.st; st.stTool = v === 'ab' ? 'ab' : +v;
+  /* leaning groups */
+  function groupOf(r, i, c) { const W = r.G[0].length;
+    for (let b = Math.max(0, c - 1); b <= Math.min(W - 1, c + 1); b++) if (r.G[i][b] && M.groupCols(r.G, i, b).includes(c)) return { i, b }; return null; }
+  const WHY = { center: "That square isn't part of a dc. Tap an X stitch's square (or the square it covers) to make it the straight stitch.",
+    edge: s => `There's no stitch to its ${s} (edge of the chart).`, dc: s => `The stitch to its ${s} is a dc going straight down, so it can't lean.`,
+    above: s => `The stitch to its ${s} has a dc right above it, which would land on the leaning stitch.`, taken: s => `The stitch to its ${s} already leans into another group.` };
+  function groupTap(r, i, c, bits) { const H = r.F.length, note = t => { $('stNote').innerHTML = t; $('stNote').dataset.keep = 1; };
+    if (!bits) { const gp = groupOf(r, i, c) || (i + 1 < H && groupOf(r, i + 1, c)); if (!gp) return note('No leaning group there.');
+      r.hist.push(snap(r)); r.G[gp.i][gp.b] = 0; return stChanged(`Took out the leaning group on row ${gp.i + 1}.`); }
+    const ci = r.X[i][c] ? i : i + 1 < H && r.X[i + 1][c] ? i + 1 : -1;
+    if (ci < 0) return note(WHY.center);
+    const old = r.G[ci][c]; r.G[ci][c] = 0; const why = M.groupProblem(r.X, r.G, ci, c, bits); r.G[ci][c] = old;
+    if (why) { const [k, side] = why.split(':'); return note(`<b class="warn">Can't lean there.</b> ` + (side ? WHY[k](side) : WHY[k])); }
+    r.hist.push(snap(r)); r.G[ci][c] = bits; M.groupCols(r.G, ci, c).forEach(q => { r.Y[ci][q] = r.Y[ci][c]; });
+    stChanged(`<b class="ok">✔ Added</b> ${{ 1: '\\|', 2: '|/', 3: '\\|/' }[bits]} on row ${ci + 1}: the written row now says “${{ 1: '2 dc in next st then sk 1', 2: 'sk 1 then 2 dc in next st', 3: 'sk 1 then 3 dc in next st then sk 1' }[bits]}”.`); }
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { const v = b.dataset.st; st.stTool = v === 'ab' ? 'ab' : v[0] === 'g' ? v : +v;
     document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b)); if (!st.stEdit) $('stEdit').click(); else drawSt(); });
   ['hexC', 'hexD'].forEach((id, k) => { $(id).oninput = () => { st.extraHex[k] = $(id).value; st.hexTouched[k] = true; if (st.cands.length) show(); drawPalette(); }; });
   $('stIn').onclick = () => zoom('stZoom', 1, drawSt); $('stOut').onclick = () => zoom('stZoom', -1, drawSt);

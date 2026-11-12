@@ -23,7 +23,7 @@
   function greedy(H, per) { const out = []; let r0 = 1; while (true) { const r1 = Math.min(H, r0 + per - 1); out.push([r0, r1]); if (r1 >= H) break; r0 = r1 - 1; } return out; }
 
   function build(o) {
-    const { X, plan } = o, EX = o.Y && o.Y.some(row => row.some(v => v)) ? { Y: o.Y, extras: o.extras } : {}, H = X.length, Wd = X[0].length, n = Wd + 2;
+    const { X, plan } = o, EX = Object.assign(o.Y && o.Y.some(row => row.some(v => v)) ? { Y: o.Y, extras: o.extras } : {}, o.G && o.G.some(row => row.some(v => v)) ? { G: o.G } : {}), H = X.length, Wd = X[0].length, n = Wd + 2;
     const title = clean(o.title).trim(), names = o.names || {}, Y = yarns(plan, H);
     const nm = e => { const v = clean(names[e.key] || '').trim(); return v ? `${e.label} - ${v}` : e.label; };
     const doc = new root.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
@@ -51,10 +51,14 @@
       ls.forEach((l, i) => { ensure(14 * K); ink(DARK); font('normal', size); if (i === 0 && bullet) { fill(DARK); doc.circle(indent - 7, T(y + size * 0.33), 1.3, 'F'); } text(l, indent, y); y -= 14 * K; }); y -= 3 * K; }
     function fit(fn) { const before = doc.getNumberOfPages(), p0 = page; for (K = 1; ; K -= 0.05) { fn(); if (doc.getNumberOfPages() === before + 1 || K < 0.8) break;
         while (doc.getNumberOfPages() > before) doc.deletePage(doc.getNumberOfPages()); page = p0; } K = 1; }
+    /* leaning-stitch symbol: straight leg at cx, slanted legs from xl / xr (bits 1 / 2), top yT to base yB */
+    function gmark(cx, xl, xr, yT, yB, bits, col, lw) { stroke(col); doc.setLineWidth(lw);
+      line(cx, yT, cx, yB); if (bits & 1) line(xl, yT, cx, yB); if (bits & 2) line(xr, yT, cx, yB); }
     function swatch(hex, label, mark) { ensure(20 * K); fill(hex); stroke(DARK); doc.setLineWidth(.5); rect(64, y - 3, 14, 14, true, true);
       const ik = lum(rgbOf(hex)) < 140 ? '#ffffff' : DARK;
       if (mark === 'X') { stroke(ik); doc.setLineWidth(1); line(66, y - 1, 76, y + 9); line(66, y + 9, 76, y - 1); }
       if (mark === 'BS') { ink(ik); font('bold', 6); text('BS', 71, y + 2, { align: 'center' }); }
+      if (typeof mark === 'number') gmark(71, 66, 76, y + 9, y - 1, mark, ik, 1);
       ink(DARK); font('normal', 10.5 * K); wrap(label, 'normal', 10.5 * K, PW - 86 - 60).forEach((l, i) => { if (i) { y -= 13 * K; } text(l, 86, y); }); y -= 20 * K; }
     const yarnRows = e => { const par = e.yarn === 'A' ? 'odd' : 'even'; return e.from === e.to ? `row ${e.from}` : `${par} rows ${e.from}-${e.to}`; };
     const yarnLine = e => `${nm(e)}: ${yarnRows(e)}${e.yarn === 'A' && e.from === 1 ? ', plus the row 0 chain' : ''}`;
@@ -134,6 +138,10 @@
     y -= 6; sec('Chart key'); Y.forEach(e => swatch(e.hex, yarnLine(e)));
     if (EX.Y) EX.extras.forEach((e, k) => { if (EX.Y.some(row => row.includes(k + 1))) swatch(e.hex, `Color ${e.label} (carried strand): squares shaded this color are worked with ${e.label}. The written rows show them as [${e.label}: …].`); });
     swatch(Y[0].hex, 'X = dc in front 2 rows down', 'X'); swatch(Y[0].hex, 'BS = border stitch', 'BS');
+    if (EX.G) { const has = b => EX.G.some(row => row.includes(b));
+      if (has(1)) swatch(Y[0].hex, '2 dc in next st then sk 1: the straight dc and the one to its left go into the same stitch 2 rows below.', 1);
+      if (has(2)) swatch(Y[0].hex, 'sk 1 then 2 dc in next st: the one to the right leans into the straight dc\'s stitch 2 rows below.', 2);
+      if (has(3)) swatch(Y[0].hex, 'sk 1 then 3 dc in next st then sk 1: both neighbors lean into the straight dc\'s stitch.', 3); }
     y -= 8; sec('Abbreviations (US terms)');
     [['ch', 'chain'], ['sc', 'single crochet (back loop only, see notes)'], ['dc', 'double crochet (front loop, 2 rows below, see notes)'], ['BS', 'border stitch (sc through both loops)'], ['st(s)', 'stitch(es)'], ['RS', 'right side']]
       .forEach(([a, b]) => { ensure(14); font('bold', 10.5 * K); ink(DARK); text(a, 64, y); font('normal', 10.5 * K); text(b, 110, y); y -= 14 * K; }); footer(); });
@@ -161,18 +169,23 @@
         for (let k = 0; k < n; k++) { fill(cellHex(k)); rect(x0 + k * cs, yy, cs, cs, true, true); }
         for (let k = 0; k < n; k++) { const xx = x0 + k * cs, ik = lum(rgbOf(cellHex(k))) < 140 ? '#ffffff' : '#1a1a1a';
           if (k === 0 || k === n - 1) { if (cs >= 6) { ink(ik); font('bold', Math.min(5, cs * 0.42)); text('BS', xx + cs / 2, yy + cs / 2 - cs * 0.15, { align: 'center' }); } else { fill(ik); rect(xx + cs * .35, yy + cs * .35, cs * .3, cs * .3, true); } }
-          else if (X[r - 1][k - 1]) { stroke(ik); doc.setLineWidth(Math.max(.5, cs / 11)); const p = cs * 0.2; line(xx + p, yy + p, xx + cs - p, yy + cs - p); line(xx + p, yy + cs - p, xx + cs - p, yy + p); } }
+          else if (X[r - 1][k - 1] && !(EX.G && EX.G[r - 1][k - 1])) { stroke(ik); doc.setLineWidth(Math.max(.5, cs / 11)); const p = cs * 0.2; line(xx + p, yy + p, xx + cs - p, yy + cs - p); line(xx + p, yy + cs - p, xx + cs - p, yy + p); } }
         ink(DARK); font('normal', fs); text(String(r), x0 - 14, yy + cs * .3, { align: 'right' }); text(String(r), x0 + gw + 14, yy + cs * .3);
         font('bold', fs); text(r % 2 ? 'A' : 'B', x0 - 6, yy + cs * .3, { align: 'center' }); text(r % 2 ? 'A' : 'B', x0 + gw + 7, yy + cs * .3, { align: 'center' });
         if (pi && r === r0 + 1) { stroke(TEAL); doc.setLineWidth(1.5); line(x0 - 30, yy + cs, x0 + gw + 30, yy + cs); } }
+      if (EX.G) for (let r = Math.max(2, r0); r <= r1; r++) EX.G[r - 1].forEach((v, b) => { if (!v) return;
+        const xc = c => x0 + (c + 1) * cs + cs / 2, yy = ybot + (r - r0) * cs, yT = yy + cs * 0.88, yB = r - 1 >= r0 ? yy - cs * 0.9 : yy + cs * 0.1;
+        gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#ffffff', Math.max(1.2, cs / 6)); gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#1a1a1a', Math.max(.6, cs / 14)); });
       const top = ybot + (r1 - r0 + 1) * cs, nf = Math.max(2.8, Math.min(6.5, cs * 0.55)); ink(DARK); font('normal', nf);
       for (let k = 0; k < n; k++) { const s = String(n - k), xx = x0 + k * cs + cs / 2; if (cs < 6 && (n - k) % 5 && n - k !== 1 && n - k !== n) continue; text(s, xx, top + 3, { align: 'center' }); text(s, xx, ybot - nf - 2, { align: 'center' }); }
-      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? EX.extras.filter((e, k) => EX.Y.some(row => row.includes(k + 1))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']]);
+      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? EX.extras.filter((e, k) => EX.Y.some(row => row.includes(k + 1))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']])
+        .concat(EX.G ? [[1, '2 dc in next st then sk 1'], [2, 'sk 1 then 2 dc in next st'], [3, 'sk 1 then 3 dc in next st then sk 1']].filter(([b]) => EX.G.some(row => row.includes(b))).map(([b, t]) => [Y[0].hex, b, t]) : []);
       let kx = 54, ky = ybot - 30; font('normal', 8);
       items.forEach(([hx, m, t]) => { const tw = width(t, 'normal', 8) + 30; if (kx + tw > LW - 54) { kx = 54; ky -= 16; }
         fill(hx); stroke(DARK); doc.setLineWidth(.4); rect(kx, ky - 3, 10, 10, true, true); const ik = lum(rgbOf(hx)) < 140 ? '#ffffff' : '#1a1a1a';
         if (m === 'X') { stroke(ik); line(kx + 2, ky - 1, kx + 8, ky + 5); line(kx + 2, ky + 5, kx + 8, ky - 1); }
         if (m === 'BS') { ink(ik); font('bold', 4.5); text('BS', kx + 5, ky, { align: 'center' }); }
+        if (typeof m === 'number') gmark(kx + 5, kx + 1.5, kx + 8.5, ky + 6, ky - 2, m, ik, .7);
         ink(DARK); font('normal', 8); text(t, kx + 14, ky); kx += Math.max(160, tw); });
       if (pi < ranges.length - 1) { ink(TEAL); font('bold', 9); text('Continued on next page >>', LW - 54, LH - 96, { align: 'right' }); }
       footer();

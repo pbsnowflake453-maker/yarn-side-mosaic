@@ -233,6 +233,31 @@
     return { F: out, X, valid: !bad.length, changed, lockedChanged };
   }
 
-  root.Mosaic = { problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
+  /* ---------- diagonal (leaning) dc groups ----------
+     G[i][b] marks a group whose straight dc is at row i, column b (columns left to right): bit 1 = the stitch to its
+     left leans in (chart symbol \|, "2 dc in next st then sk 1"), bit 2 = the stitch to its right leans in (|/,
+     "sk 1 then 2 dc in next st"), 3 = both (\|/, "sk 1 then 3 dc in next st then sk 1"). Leaning stitches are dc's
+     worked into the same front loop two rows down as the straight one, so their own square below stays uncovered. */
+  const groupCols = (G, i, b) => [b].concat(G[i][b] & 1 ? [b - 1] : [], G[i][b] & 2 ? [b + 1] : []);
+  /* lean of the stitch at (i, c): +1 = its base is one column right, -1 = one column left, 0 = none */
+  function leanAt(G, i, c) { const W = G[0].length;
+    if (c + 1 < W && G[i][c + 1] & 1) return 1; if (c - 1 >= 0 && G[i][c - 1] & 2) return -1; return 0; }
+  /* '' if the group is possible, otherwise why not (side = 'left' / 'right') */
+  function groupProblem(X, G, i, b, bits) {
+    const H = X.length, W = X[0].length;
+    if (!X[i][b]) return 'center';
+    for (const [bit, nb, side] of [[1, b - 1, 'left'], [2, b + 1, 'right']]) { if (!(bits & bit)) continue;
+      if (nb < 0 || nb >= W) return 'edge:' + side;
+      if (X[i][nb] || G[i][nb]) return 'dc:' + side;
+      if (i + 1 < H && X[i + 1][nb]) return 'above:' + side;
+      if ((nb - 1 >= 0 && nb - 1 !== b && G[i][nb - 1] & 2) || (nb + 1 < W && nb + 1 !== b && G[i][nb + 1] & 1)) return 'taken:' + side; }
+    return '';
+  }
+  /* drop groups that stopped being possible (after the chart changed); returns how many were dropped */
+  function cleanGroups(X, G) { let n = 0;
+    G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v)) n++; else G[i][b] = v; }));
+    return n; }
+
+  root.Mosaic = { groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
   if (typeof module !== 'undefined') module.exports = root.Mosaic;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -17,6 +17,17 @@
       for (let i = 0; i <= H; i++) { g.beginPath(); g.moveTo(0, i * cell + .5); g.lineTo(W * cell, i * cell + .5); g.stroke(); } }
     return cv;
   }
+  /* Leaning-stitch symbols like printed patterns: a straight line down the straight dc and a slanted line from each
+     leaning stitch's top to the same base, two rows down. xc(c) = column center, top(i) = top edge of row i. */
+  function drawGroups(g, G, xc, top, rh, opts = {}) {
+    if (!G) return; const H = G.length, lw = opts.lw || Math.max(1.5, rh / 9);
+    for (let i = 1; i < H; i++) for (let b = 0; b < G[i].length; b++) { const v = G[i][b]; if (!v) continue;
+      const y0 = top(i) + rh * 0.12, y1 = top(i) + rh * 1.9, x = xc(b), legs = [[x, y0]];
+      if (v & 1) legs.push([xc(b - 1), y0]); if (v & 2) legs.push([xc(b + 1), y0]);
+      for (const [w, c] of [[lw + 2.5, opts.halo || 'rgba(255,255,255,.9)'], [lw, opts.ink || '#1a1a1a']]) {
+        g.lineWidth = w; g.strokeStyle = c; g.lineCap = 'round';
+        for (const [lx, ly] of legs) { g.beginPath(); g.moveTo(lx, ly); g.lineTo(x, y1); g.stroke(); } } }
+  }
   function gridLines(g, W, H, cell, a) {
     g.strokeStyle = `rgba(0,0,0,${a})`; g.lineWidth = 1;
     for (let c = 0; c <= W; c++) { g.beginPath(); g.moveTo(c * cell + .5, 0); g.lineTo(c * cell + .5, H * cell); g.stroke(); }
@@ -40,6 +51,7 @@
       if (opts.bad && opts.bad[i][c]) { g.strokeStyle = '#e0001b'; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, cell - lw, cell - lw); }
       if (opts.mine && opts.mine[i][c]) { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, Math.max(1.5, cell * 0.16), 0, 2 * Math.PI); g.fill(); g.stroke(); }
     }
+    drawGroups(g, opts.groups, c => c * cell + cell / 2, i => (H - 1 - i) * cell, cell);
     cv._cell = cell; cv._H = H; return cv;
   }
 
@@ -69,11 +81,12 @@
         const x = L + k * cell; g.fillStyle = css(fill); g.fillRect(x, y, cell, cell);
         g.strokeStyle = '#999'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, cell, cell);
         if (k === 0 || k === n - 1) { g.fillStyle = ink; g.font = small; g.textAlign = 'center'; g.fillText('BS', x + cell / 2, y + cell / 2); }
-        else if (X[i][k - 1]) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
+        else if (X[i][k - 1] && !(opts.groups && opts.groups[i][k - 1])) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
           g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + cell - p, y + cell - p); g.moveTo(x + cell - p, y + p); g.lineTo(x + p, y + cell - p); g.stroke(); }
       }
       label(r, y, (rc ? 'B' : 'A') + (opts.carry ? opts.carry(r) : ''));
     }
+    drawGroups(g, opts.groups, c => L + (c + 1) * cell + cell / 2, i => top + (H - 1 - i) * cell, cell, { lw: Math.max(1.5, cell / 12) });
     const y0 = top + H * cell;
     for (let k = 0; k < n; k++) { const x = L + k * cell; g.strokeStyle = '#000'; g.lineWidth = Math.max(1.2, cell / 14);
       g.beginPath(); g.ellipse(x + cell / 2, y0 + cell / 2, cell * 0.36, cell * 0.2, 0, 0, 2 * Math.PI); g.stroke(); }
@@ -81,7 +94,8 @@
     g.font = small; g.textAlign = 'center'; g.fillStyle = '#000';
     for (let k = 0; k < n; k++) { const num = String(n - k), x = L + k * cell + cell / 2; g.fillText(num, x, top - cell * 0.45); g.fillText(num, x, y0 + cell * 1.45); }
     g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05);
-    g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : ''), L, y0 + cell * 2.55);
+    g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
+      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight one beside it (same stitch 2 rows down).' : ''), L, y0 + cell * 2.55);
     if (legend.length) { let y = y0 + cell * 3.2; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
       for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(L, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(L + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
         g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }
@@ -111,8 +125,13 @@
     for (let k = 0; k < n; k++) loop(X0(k) + 2, pad + H * rh + 4, cw - 4, rh - 8, rowRGB(1));
     for (let i = 0; i < H; i++) {
       const c = rowRGB(i + 1);
+      const lean = col => (opts.lean && col >= 0 && col < W ? opts.lean(i, col) : 0), leaning = [];
       for (let k = 0; k < n; k++) { const col = k - 1, x = X0(k), y = Y0(i), sc = stitch(i, col);
+        if (lean(col)) { leaning.push(k); continue; }
         if (col >= 0 && col < W && X[i][col]) loop(x + .5, y, cw - 1, rh * 2, sc); else loop(x + .5, y + .5, cw - 1, rh - 1, sc); }
+      // leaning dc: a long stitch slanting from its own top down to the next stitch's base, drawn on top
+      for (const k of leaning) { const col = k - 1, y = Y0(i), sk = lean(col) * cw * 0.9 / (rh * 2);
+        g.save(); g.transform(1, 0, sk, 1, -sk * y, 0); loop(X0(k) + .5, y, cw - 1, rh * 2, stitch(i, col)); g.restore(); }
       g.strokeStyle = sh(c, .45); g.lineWidth = 1; g.beginPath(); g.moveTo(X0(0), Y0(i) + rh - 1); g.lineTo(X0(n), Y0(i) + rh - 1); g.stroke();
     }
     const grd = g.createRadialGradient(cv.width * .4, cv.height * .35, 10, cv.width * .5, cv.height * .5, Math.max(cv.width, cv.height) * .75);
@@ -141,5 +160,5 @@
       if (kind === 'bad') { g.strokeStyle = '#fff'; g.lineWidth = lw + 2; g.strokeRect(x + lw / 2, y + lw / 2, k - lw, k - lw); g.strokeStyle = '#e0001b'; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, k - lw, k - lw); }
       else { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + k / 2, y + k / 2, Math.max(1.5, k * 0.18), 0, 2 * Math.PI); g.fill(); g.stroke(); } }));
   }
-  root.MosaicRender = { drawGridCheck, markCells, drawGrid, drawTopDown, drawEdit, drawChart, drawPreview };
+  root.MosaicRender = { drawGroups, drawGridCheck, markCells, drawGrid, drawTopDown, drawEdit, drawChart, drawPreview };
 })(window);
