@@ -17,10 +17,30 @@
       for (let i = 0; i <= H; i++) { g.beginPath(); g.moveTo(0, i * cell + .5); g.lineTo(W * cell, i * cell + .5); g.stroke(); } }
     return cv;
   }
-  function drawTopDown(G, palette, cell) { // original top-down index grid with palette
+  function gridLines(g, W, H, cell, a) {
+    g.strokeStyle = `rgba(0,0,0,${a})`; g.lineWidth = 1;
+    for (let c = 0; c <= W; c++) { g.beginPath(); g.moveTo(c * cell + .5, 0); g.lineTo(c * cell + .5, H * cell); g.stroke(); }
+    for (let i = 0; i <= H; i++) { g.beginPath(); g.moveTo(0, i * cell + .5); g.lineTo(W * cell, i * cell + .5); g.stroke(); }
+  }
+  function drawTopDown(G, palette, cell, grid) { // original top-down index grid with palette
     const H = G.length, W = G[0].length, cv = mk(W * cell, H * cell), g = cv.getContext('2d');
     for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) { g.fillStyle = css(palette[G[i][c]]); g.fillRect(c * cell, i * cell, cell, cell); }
-    return cv;
+    if (grid && cell >= 5) gridLines(g, W, H, cell, 0.18);
+    cv._cell = cell; return cv;
+  }
+  /* Editable view of the finished look F (bottom-up). bad = can't be worked (red), mine = hand-edited (teal dot), auto = changed by the fixer (orange). */
+  function drawEdit(F, opts = {}) {
+    const cell = opts.cell || 12, H = F.length, W = F[0].length, cv = mk(W * cell, H * cell), g = cv.getContext('2d');
+    for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) { g.fillStyle = css(opts.cellRGB(i, c, F[i][c])); g.fillRect(c * cell, (H - 1 - i) * cell, cell, cell); }
+    if (cell >= 5) gridLines(g, W, H, cell, 0.2);
+    const lw = Math.max(2, Math.round(cell / 6));
+    for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) {
+      const x = c * cell, y = (H - 1 - i) * cell;
+      if (opts.auto && opts.auto[i][c]) { g.strokeStyle = '#eb7800'; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, cell - lw, cell - lw); }
+      if (opts.bad && opts.bad[i][c]) { g.strokeStyle = '#e0001b'; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, cell - lw, cell - lw); }
+      if (opts.mine && opts.mine[i][c]) { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, Math.max(1.5, cell * 0.16), 0, 2 * Math.PI); g.fill(); g.stroke(); }
+    }
+    cv._cell = cell; cv._H = H; return cv;
   }
 
   function drawChart(F, X, opts = {}) {
@@ -98,5 +118,5 @@
     if (!opts.noLabel) { g.fillStyle = 'rgba(80,74,66,.85)'; g.font = '13px sans-serif'; g.textAlign = 'right'; g.fillText('Design preview', cv.width - 10, cv.height - 10); }
     return cv;
   }
-  root.MosaicRender = { drawGrid, drawTopDown, drawChart, drawPreview };
+  root.MosaicRender = { drawGrid, drawTopDown, drawEdit, drawChart, drawPreview };
 })(window);

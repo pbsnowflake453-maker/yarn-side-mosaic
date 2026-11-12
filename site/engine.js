@@ -33,22 +33,23 @@
     if (T.length % 2 === 0) T.push(new Array(W).fill(0));
     return T.map(r => new Array(side).fill(0).concat(r, new Array(side).fill(0)));
   }
-  function cellCost(T, i, c, v, P) {
+  function cellCost(T, i, c, v, P, lock) {
     if (T[i][c] === v) return 0;
-    if (T[i][c] === 1) return P[i][c] ? 8 : 5;
+    if (lock && lock[i][c]) return 40;   // a cell the designer edited by hand: change only as a last resort
+    if (T[i][c] === 1) return P && P[i][c] ? 8 : 5;
     const H = T.length, W = T[0].length, at = (a, d) => (a >= 0 && a < H && d >= 0 && d < W) ? T[a][d] : 0;
     const nb = at(i + 1, c) + at(i - 1, c) + at(i, c + 1) + at(i, c - 1);
     if ((at(i, c - 1) && at(i, c + 1)) || (at(i - 1, c) && at(i + 1, c))) return 2.5; // merge cost
     return nb ? 1 : 3;
   }
-  function columnDP(T, c, P) {
+  function columnDP(T, c, P, lock) {
     const H = T.length; let best = new Map([[false, { cost: 0, path: [] }]]);
     for (let i = 0; i < H; i++) {
       const r = i + 1, nxt = new Map();
       for (const [pm, st] of best) for (const v of [T[i][c], 1 - T[i][c]]) {
         const m = v !== color(r);
         if (m && pm) continue; if (m && i === H - 1) continue;
-        const k = st.cost + cellCost(T, i, c, v, P);
+        const k = st.cost + cellCost(T, i, c, v, P, lock);
         if (!nxt.has(m) || k < nxt.get(m).cost) nxt.set(m, { cost: k, path: st.path.concat([v]) });
       }
       best = nxt;
@@ -204,6 +205,25 @@
     return { idx, palette: palette.map(p => p.map(Math.round)), counts, nx: xs.length, ny: ys.length };
   }
 
-  root.Mosaic = { color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
+  /* Cells (bottom-up F) that can't be worked: a mismatch in the top row, or two mismatches stacked in a column. */
+  function problemCells(F) {
+    const H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0;
+    const mis = (i, c) => F[i][c] !== color(i + 1);
+    for (let c = 0; c < W; c++) for (let i = 0; i < H; i++) if (mis(i, c)) {
+      if (i === H - 1) { if (!bad[i][c]) n++; bad[i][c] = 1; }
+      if (i > 0 && mis(i - 1, c)) { if (!bad[i][c]) n++; if (!bad[i - 1][c]) n++; bad[i][c] = bad[i - 1][c] = 1; }
+    }
+    return { bad, n };
+  }
+  /* Make a hand-edited chart workable with the fewest changes, keeping locked (hand-edited) cells if at all possible. */
+  function refix(F, lock) {
+    const out = clone(F);
+    for (let c = 0; c < F[0].length; c++) { const res = columnDP(F, c, null, lock); if (!res) return null; for (let i = 0; i < F.length; i++) out[i][c] = res.path[i]; }
+    const { X, bad } = check(out); let changed = 0, lockedChanged = 0;
+    out.forEach((row, i) => row.forEach((v, c) => { if (v !== F[i][c]) { changed++; if (lock && lock[i][c]) lockedChanged++; } }));
+    return { F: out, X, valid: !bad.length, changed, lockedChanged };
+  }
+
+  root.Mosaic = { problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
   if (typeof module !== 'undefined') module.exports = root.Mosaic;
 })(typeof window !== 'undefined' ? window : globalThis);

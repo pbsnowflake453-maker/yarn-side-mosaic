@@ -19,3 +19,11 @@ button.on{background:#c8102e}button:disabled{opacity:.5}.swatch{width:46px;heigh
 dialog{border:none;border-radius:12px;max-width:480px;width:92%;box-shadow:0 6px 30px rgba(0,0,0,.25)}dialog label{display:block;margin:8px 0}dialog input[type=text],dialog textarea{width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;font:inherit}.pcol{display:flex;gap:8px;align-items:center;margin:4px 0}.pcol span.sw{width:22px;height:22px;border:1px solid #888;border-radius:4px;flex:none}.pcol input{flex:1}
 
 footer.shop{text-align:center;padding:18px;font-size:14px;color:#555}footer.shop a{color:#125765;font-weight:700}
+
+.editBox{background:#f6f1ea;border-radius:10px;padding:10px;margin:8px 0}.editBox .row{margin:6px 0}.zoom{display:inline-flex;gap:4px}.zoom button{padding:9px 13px}
+button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cursor:crosshair}
+.psw{width:40px;height:40px;border-radius:8px;border:2px solid #aaa;display:flex;align-items:flex-end;justify-content:center;font-weight:700;font-size:.8rem;cursor:pointer;padding-bottom:1px;text-shadow:0 0 3px #fff,0 0 2px #fff}
+.psw.sel{outline:3px solid #125765;outline-offset:2px}.out canvas.zoomed{max-width:none}
+.edLegend .k{display:inline-block;width:12px;height:12px;vertical-align:middle;margin:0 4px 0 10px;border:2px solid}.edLegend .k:first-child{margin-left:0}
+.edLegend .bad{border-color:#e0001b}.edLegend .auto{border-color:#eb7800}.edLegend .mine{border:none;border-radius:50%;background:#125765}
+.ok{color:#1d7a3a}.warn{color:#b00020}
