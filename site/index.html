@@ -12,6 +12,9 @@
  <div class="editBox hidden" id="pixBox">
   <div class="row"><button class="sec" id="pixEdit">&#9998; Edit pixels</button><span class="zoom"><button class="sec" id="pixOut" title="Smaller">&minus;</button><button class="sec" id="pixIn" title="Bigger">+</button></span>
    <button class="sec" id="pixUndo" disabled>Undo</button><button class="sec" id="pixReset" disabled>Undo all</button></div>
+  <div class="sizeTools"><div class="row"><span class="small lab">Rows</span><button class="sec" data-pad="top,1">+ top</button><button class="sec" data-pad="top,-1">− top</button><button class="sec" data-pad="bottom,1">+ bottom</button><button class="sec" data-pad="bottom,-1">− bottom</button></div>
+   <div class="row"><span class="small lab">Columns</span><button class="sec" data-pad="left,1">+ left</button><button class="sec" data-pad="left,-1">− left</button><button class="sec" data-pad="right,1">+ right</button><button class="sec" data-pad="right,-1">− right</button></div>
+   <div class="row"><button class="sec" id="padCenter">Center the picture</button><button class="sec" id="padTrim">Trim empty edges</button><span class="small" id="sizeNote"></span></div></div>
   <div class="hidden" id="pixTools"><div class="row"><span class="small">Tool:</span><button class="sec on" data-tool="paint">Paint</button><button class="sec" data-tool="keep">Keep exactly</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
    <p class="small" id="toolHelp">Pick a color, then tap or drag on the picture. A / B shows which yarn that color becomes.</p><div class="row" id="pixPal"></div></div>
   <p class="small" id="troubleNote"></p>

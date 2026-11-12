@@ -169,7 +169,9 @@
         const d = ls.slice(1).map((v, i) => v - ls[i]).filter(v => Math.abs(v - p) < 0.25 * p), pp = d.reduce((a, b) => a + b, 0) / d.length;
         const off = median(ls.map(v => ((v % pp) + pp) % pp)), out = [];
         const pairs = []; for (let i = 0; i + 1 < ls.length; i++) if (Math.abs(ls[i + 1] - ls[i] - p) < 0.3 * p) pairs.push((ls[i] + ls[i + 1]) / 2);
-        const lo = pairs[0] - pp / 2 - 1, hi = pairs[pairs.length - 1] + pp / 2 + 1;   // span of regular cells; fill hidden lines inside it
+        // span of regular cells (fill hidden lines inside it), plus one cell past the outermost line on each side:
+        // art that runs to the edge of the image often has no grid line along that edge
+        const lo = pairs[0] - pp / 2 - 1 - pp, hi = pairs[pairs.length - 1] + pp / 2 + 1 + pp;
         for (let x = off; x + pp <= hi; x += pp) if (x >= lo) out.push(x + pp / 2); return out; };
       xs = cells(lx, pxg).filter(x => x >= bx0 && x <= bx1); ys = cells(ly, pyg).filter(y => y >= by0 && y <= by1);
     } else {
@@ -198,7 +200,7 @@
     const cw = xs.length > 1 ? xs[1] - xs[0] : 10, ch = ys.length > 1 ? ys[1] - ys[0] : 10;
     const cols = ys.map(y => xs.map(x => { let r = 0, g = 0, b = 0, n = 0;
       for (let dy = -0.15; dy <= 0.15; dy += 0.075) for (let dx = -0.15; dx <= 0.15; dx += 0.075) {
-        const X = Math.round(x + dx * cw), Y = Math.round(y + dy * ch), o = (Y * W + X) * 4; r += data[o]; g += data[o + 1]; b += data[o + 2]; n++; }
+        const X = Math.min(W - 1, Math.max(0, Math.round(x + dx * cw))), Y = Math.min(img.height - 1, Math.max(0, Math.round(y + dy * ch))), o = (Y * W + X) * 4; r += data[o]; g += data[o + 1]; b += data[o + 2]; n++; }
       return [r / n, g / n, b / n]; }));
     // cluster colors
     const palette = [], counts = [], dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);

@@ -135,7 +135,7 @@
       pixChanged);
     $('pixUndo').disabled = $('pixReset').disabled = !st.pixHist.length; }
   const pixSnap = () => { const s = st.samp; return { idx: s.idx.map(r => r.slice()), keep: st.keep.map(r => r.slice()), palette: s.palette.map(c => c.slice()), counts: s.counts.slice(), map: st.map.slice(), bg: st.bg, paint: st.paint }; };
-  function pixRestore(h) { const s = st.samp; s.idx = h.idx; s.palette = h.palette; s.counts = h.counts; st.keep = h.keep; st.map = h.map; st.bg = h.bg; st.paint = h.paint; }
+  function pixRestore(h) { const s = st.samp; s.ny = h.idx.length; s.nx = h.idx[0].length; s.idx = h.idx; s.palette = h.palette; s.counts = h.counts; st.keep = h.keep; st.map = h.map; st.bg = h.bg; st.paint = h.paint; }
   function pixChanged() {
     const s = st.samp, h = st.pixHist[st.pixHist.length - 1];
     if (h && JSON.stringify([h.idx, h.keep, h.palette]) === JSON.stringify([s.idx, st.keep, s.palette])) st.pixHist.pop();   // tap that changed nothing
@@ -144,9 +144,8 @@
     if (st.cands.length && st.pixHist.length) $('pixNote').textContent = 'Picture edited. Press Convert (step 3) to update the chart.'; }
   /* Cropped (and scaled) two-color motif plus the matching keep-exactly mask, exactly as Convert uses them. */
   function motifAndLock() {
-    const G = mono(); let y0 = G.length, y1 = -1, x0 = G[0].length, x1 = -1;
-    G.forEach((r, i) => r.forEach((v, j) => { if (v) { y0 = Math.min(y0, i); y1 = Math.max(y1, i); x0 = Math.min(x0, j); x1 = Math.max(x1, j); } }));
-    if (y1 < 0) { y0 = 0; y1 = G.length - 1; x0 = 0; x1 = G[0].length - 1; }
+    // The chart uses the pixel graph exactly as shown, empty edges included (Trim empty edges removes them).
+    const G = mono(), y0 = 0, y1 = G.length - 1, x0 = 0, x1 = G[0].length - 1;
     const cut = A => A.slice(y0, y1 + 1).map(r => r.slice(x0, x1 + 1)), sc = A => (st.scale > 1 ? M.scale(A, st.scale) : A);
     const lock = sc(cut(st.keep));
     return { motif: sc(cut(G)), lock: lock.some(r => r.some(v => v)) ? lock : null, y0, x0 };
@@ -194,6 +193,37 @@
   $('pixEdit').onclick = () => { st.pixEdit = !st.pixEdit; $('pixEdit').classList.toggle('on', st.pixEdit); $('pixTools').classList.toggle('hidden', !st.pixEdit); drawOrig(); };
   $('pixUndo').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist.pop()); pixChanged(); };
   $('pixReset').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist[0]); st.pixHist = []; pixChanged(); $('pixNote').textContent = 'Pixel edits, keeps and merges undone.'; };
+  // Add / remove empty rows and columns, center, trim
+  const emptyRow = r => r.every(v => !st.map[v]);
+  function resize(fn, note) { const s = st.samp; st.pixHist.push(pixSnap()); const res = fn(s.idx, st.keep);
+    if (!res) { st.pixHist.pop(); return; } s.idx = res.idx; st.keep = res.keep; s.ny = s.idx.length; s.nx = s.idx[0].length;
+    pixChanged(); $('sizeNote').textContent = (typeof note === 'function' ? note(res) : note) + ` Now ${s.nx} × ${s.ny}.`; }
+  const T = A => A[0].map((_, j) => A.map(r => r[j]));   // swap rows/columns so one routine handles both
+  function pad(idx, keep, side, n) {
+    const cols = side === 'left' || side === 'right', end = side === 'bottom' || side === 'right';
+    let I = cols ? T(idx) : idx.map(r => r.slice()), K = cols ? T(keep) : keep.map(r => r.slice()), lost = 0;
+    for (let k = 0; k < Math.abs(n); k++) {
+      if (n > 0) { const ri = I[0].map(() => st.bg), rk = I[0].map(() => 0); if (end) { I.push(ri); K.push(rk); } else { I.unshift(ri); K.unshift(rk); } }
+      else { if (I.length <= 2) return null; const gone = end ? I.pop() : I.shift(); end ? K.pop() : K.shift(); lost += gone.filter(v => st.map[v]).length; }
+    }
+    return { idx: cols ? T(I) : I, keep: cols ? T(K) : K, lost };
+  }
+  function margins(idx) { const m = { top: 0, bottom: 0, left: 0, right: 0 }, R = idx, C = T(idx);
+    while (m.top < R.length && emptyRow(R[m.top])) m.top++; while (m.bottom < R.length - m.top && emptyRow(R[R.length - 1 - m.bottom])) m.bottom++;
+    while (m.left < C.length && emptyRow(C[m.left])) m.left++; while (m.right < C.length - m.left && emptyRow(C[C.length - 1 - m.right])) m.right++; return m; }
+  document.querySelectorAll('[data-pad]').forEach(b => b.onclick = () => { const [side, n] = b.dataset.pad.split(','), k = +n;
+    resize((idx, keep) => pad(idx, keep, side, k), res => k > 0 ? `Added an empty ${side === 'left' || side === 'right' ? 'column' : 'row'} on the ${side}.`
+      : `Removed the ${side} ${side === 'left' || side === 'right' ? 'column' : 'row'}` + (res.lost ? ` (it had ${res.lost} colored square${res.lost > 1 ? 's' : ''}; Undo brings it back).` : '.')); });
+  $('padCenter').onclick = () => { const m = margins(st.samp.idx); if (m.top === st.samp.idx.length) { $('sizeNote').textContent = 'The picture is empty.'; return; }
+    const dy = Math.floor((m.top + m.bottom) / 2) - m.top, dx = Math.floor((m.left + m.right) / 2) - m.left;
+    if (!dy && !dx) { $('sizeNote').textContent = `Already centered (${m.top} empty above, ${m.bottom} below, ${m.left} left, ${m.right} right).`; return; }
+    resize((idx, keep) => { let r = { idx, keep };
+      if (dy) { const a = pad(r.idx, r.keep, 'top', dy); r = pad(a.idx, a.keep, 'bottom', -dy); }
+      if (dx) { const a = pad(r.idx, r.keep, 'left', dx); r = pad(a.idx, a.keep, 'right', -dx); }
+      return r; }, () => { const n = margins(st.samp.idx); return `Centered: ${n.top} empty row${n.top === 1 ? '' : 's'} above, ${n.bottom} below; ${n.left} empty column${n.left === 1 ? '' : 's'} left, ${n.right} right.`; }); };
+  $('padTrim').onclick = () => { const m = margins(st.samp.idx); if (m.top === st.samp.idx.length) return;
+    if (!m.top && !m.bottom && !m.left && !m.right) { $('sizeNote').textContent = 'No empty edges to trim.'; return; }
+    resize((idx, keep) => { let r = { idx, keep }; for (const sd of ['top', 'bottom', 'left', 'right']) if (m[sd]) r = pad(r.idx, r.keep, sd, -m[sd]); return r; }, 'Trimmed the empty edges.'); };
   $('pixIn').onclick = () => zoom('pixZoom', 1, drawOrig); $('pixOut').onclick = () => zoom('pixZoom', -1, drawOrig);
 
   // After converting: edit the finished look; X's are recalculated from it

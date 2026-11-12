@@ -29,3 +29,4 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .ok{color:#1d7a3a}.warn{color:#b00020}
 .gridChk{margin:10px 0}.gridChk summary{cursor:pointer;font-weight:600;font-size:.92rem}.gridChk .out{margin-top:6px}
 .swatch.from{outline:3px dashed #125765;outline-offset:2px}
+.sizeTools{border-top:1px solid #e3dbcf;margin-top:6px;padding-top:4px}.sizeTools .row{margin:4px 0;gap:6px}.sizeTools button{padding:6px 8px;font-size:.82rem}.sizeTools .lab{width:58px;font-weight:600;color:#2b2622}
