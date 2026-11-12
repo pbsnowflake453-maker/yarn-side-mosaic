@@ -28,10 +28,15 @@
     const k = st.extra[i] - 1; if (k >= 0 && !st.hexTouched[k]) st.extraHex[k] = toHex(st.samp.palette[i]); }   // C / D start as the picture's own color
   function drawPalette() {
     const box = $('swatches'); box.innerHTML = '';
-    st.samp.palette.forEach((c, i) => { const d = document.createElement('div'), role = roleOf(i); d.className = 'swatch ' + role;
-      d.style.background = `rgb(${c})`; d.textContent = role; d.title = `${st.samp.counts[i]} cells`;
+    st.samp.palette.forEach((c, i) => { const role = roleOf(i), w = document.createElement('div'), d = document.createElement('div'); w.className = 'swWrap';
+      d.className = 'swatch ' + role; d.style.background = `rgb(${c})`; d.title = `${st.samp.counts[i]} squares`;
+      d.innerHTML = `<span class="badge">${role}</span>`;
       if (st.mergeMode && st.mergeFrom === i) d.classList.add('from');
-      d.onclick = () => { if (st.mergeMode) return mergeTap(i); setRole(i, { A: 'B', B: 'C', C: 'D', D: 'A' }[role]); drawPalette(); }; box.appendChild(d); });
+      d.onclick = () => { if (st.mergeMode) mergeTap(i); };
+      const rs = document.createElement('div'); rs.className = 'roles';
+      for (const L of 'ABCD') { const bt = document.createElement('button'); bt.type = 'button'; bt.textContent = L; bt.className = L === role ? 'on' : '';
+        bt.setAttribute('aria-label', `Make this color ${L}`); bt.onclick = () => { if (L !== role) { setRole(i, L); drawPalette(); } }; rs.appendChild(bt); }
+      w.append(d, rs); box.appendChild(w); });
     const used = [1, 2].filter(k => st.extra.includes(k)).map(k => ' CD'[k]);
     $('extraNote').innerHTML = used.length ? `${used.join(' and ')} ${used.length > 1 ? 'are' : 'is a'} carried strand${used.length > 1 ? 's' : ''}: those squares become stitches worked in ${used.join(' / ')} on the A or B row they fall in. The converter keeps a dc from landing right under them, since that stitch can't be both.` : '';
     $('hexC').value = st.extraHex[0]; $('hexD').value = st.extraHex[1]; $('dotC').style.background = st.extraHex[0]; $('dotD').style.background = st.extraHex[1];
@@ -94,7 +99,7 @@
     const order = s.palette.map((c, i) => i).filter(i => i !== st.bg).sort((a, b) => s.counts[b] - s.counts[a]);
     const lead = [st.bg].concat(order.filter(i => s.counts[i] > 0).slice(0, 3)), roles = ['A', 'B', 'C', 'D'];
     s.palette.forEach((c, i) => { let k = lead.indexOf(i); if (k < 0) k = lead.reduce((b, j, q) => (d(c, s.palette[j]) < d(c, s.palette[lead[b]]) ? q : b), 0); setRole(i, roles[k]); });
-    drawPalette(); $('palNote').textContent = lead.length < 3 ? 'Only two colors here, so there is nothing for C or D.' : `Split into ${lead.length} colors. Tap a swatch to change its letter.`; };
+    drawPalette(); $('palNote').textContent = lead.length < 3 ? 'Only two colors here, so there is nothing for C or D.' : `Split into ${lead.length} colors. Tap a letter under any color to change it.`; };
   document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.scale = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); if (st.samp) drawPalette(); });
   $('go').onclick = convert; $('dlChart').onclick = () => { const r = st.cands[st.sel], cv = Rn.drawChart(r.F, r.X, chartOpts(r, { legend: C.legend(st.plan, r.F.length).concat(extraLegend(r)) }));
     const a = document.createElement('a'); a.download = 'mosaic_chart.png'; a.href = cv.toDataURL('image/png'); a.click(); };
