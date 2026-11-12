@@ -27,3 +27,5 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .edLegend .k{display:inline-block;width:12px;height:12px;vertical-align:middle;margin:0 4px 0 10px;border:2px solid}.edLegend .k:first-child{margin-left:0}
 .edLegend .bad{border-color:#e0001b}.edLegend .auto{border-color:#eb7800}.edLegend .mine{border:none;border-radius:50%;background:#125765}
 .ok{color:#1d7a3a}.warn{color:#b00020}
+.gridChk{margin:10px 0}.gridChk summary{cursor:pointer;font-weight:600;font-size:.92rem}.gridChk .out{margin-top:6px}
+.swatch.from{outline:3px dashed #125765;outline-offset:2px}

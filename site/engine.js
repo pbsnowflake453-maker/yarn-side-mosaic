@@ -68,15 +68,16 @@
     }
     return n;
   }
-  function solve(motif, mults, bottom, protect) {
+  function solve(motif, mults, bottom, protect, lock) {
     const T = stretchRows(motif, mults, bottom), P = stretchRows(protect || motif.map(r => r.map(() => 0)), mults, bottom);
+    const L = lock ? stretchRows(lock, mults, bottom) : null;   // "keep exactly" squares, stretched like the motif
     const F = clone(T); let total = 0;
     for (let c = T[0].length - 1; c >= 0; c--) {
-      const res = columnDP(T, c, P); if (!res) return null;
+      const res = columnDP(T, c, P, L); if (!res) return null;
       total += res.cost; for (let i = 0; i < T.length; i++) F[i][c] = res.path[i];
     }
     total += 10 * Math.abs(components(F) - components(T));
-    return { cost: total, T, F, mults, bottom };
+    return { cost: total, T, F, L, mults, bottom };
   }
   function score(res, h) {
     const rows = res.mults.reduce((a, b) => a + b, 0), aspect = Math.abs(rows / h - 1);
@@ -87,7 +88,7 @@
   function findFixes(motif, opts = {}) {
     const h = motif.length, maxMult = opts.maxMult || 2, budget = opts.budget || (h > 60 ? 150 : 600), R = rng(opts.seed || 1);
     const maxAspect = opts.maxAspect == null ? 0.2 : opts.maxAspect, seen = new Map();
-    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
+    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
     const ones = new Array(h).fill(1);
     for (const b of [0, 1]) ev(ones, b);
     if (opts.stretch !== false) for (const b of [0, 1]) {
@@ -107,6 +108,7 @@
       let add = 0, rem = 0; r.T.forEach((row, i) => row.forEach((v, c) => { if (v !== r.F[i][c]) v ? rem++ : add++; }));
       r.added = add; r.removed = rem; r.rows = r.F.length; r.width = r.F[0].length;
       r.stretched = r.mults.some(m => m > 1);
+      r.lockedChanged = 0; if (r.L) r.L.forEach((row, i) => row.forEach((v, c) => { if (v && r.T[i][c] !== r.F[i][c]) r.lockedChanged++; }));
     }
     return out;
   }
@@ -202,18 +204,18 @@
     const palette = [], counts = [], dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     const idx = cols.map(row => row.map(c => { let k = palette.findIndex(p => dist(p, c) < 32);
       if (k < 0) { palette.push(c.slice()); counts.push(0); k = palette.length - 1; } counts[k]++; return k; }));
-    return { idx, palette: palette.map(p => p.map(Math.round)), counts, nx: xs.length, ny: ys.length };
+    return { idx, palette: palette.map(p => p.map(Math.round)), counts, nx: xs.length, ny: ys.length, xs, ys };
   }
 
   /* Cells (bottom-up F) that can't be worked: a mismatch in the top row, or two mismatches stacked in a column. */
   function problemCells(F) {
-    const H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0;
+    const H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0, spots = 0;   // n = squares, spots = conflicts
     const mis = (i, c) => F[i][c] !== color(i + 1);
     for (let c = 0; c < W; c++) for (let i = 0; i < H; i++) if (mis(i, c)) {
-      if (i === H - 1) { if (!bad[i][c]) n++; bad[i][c] = 1; }
-      if (i > 0 && mis(i - 1, c)) { if (!bad[i][c]) n++; if (!bad[i - 1][c]) n++; bad[i][c] = bad[i - 1][c] = 1; }
+      if (i === H - 1) { spots++; if (!bad[i][c]) n++; bad[i][c] = 1; }
+      if (i > 0 && mis(i - 1, c)) { if (!(bad[i - 1][c] && i > 1 && mis(i - 2, c) && bad[i - 2][c])) spots++; if (!bad[i][c]) n++; if (!bad[i - 1][c]) n++; bad[i][c] = bad[i - 1][c] = 1; }
     }
-    return { bad, n };
+    return { bad, n, spots };
   }
   /* Make a hand-edited chart workable with the fewest changes, keeping locked (hand-edited) cells if at all possible. */
   function refix(F, lock) {

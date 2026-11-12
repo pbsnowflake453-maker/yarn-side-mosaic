@@ -118,5 +118,26 @@
     if (!opts.noLabel) { g.fillStyle = 'rgba(80,74,66,.85)'; g.font = '13px sans-serif'; g.textAlign = 'right'; g.fillText('Design preview', cv.width - 10, cv.height - 10); }
     return cv;
   }
-  root.MosaicRender = { drawGrid, drawTopDown, drawEdit, drawChart, drawPreview };
+  /* The uploaded image with the grid the app read: lines between cells, a dot where each cell's color was sampled. */
+  function drawGridCheck(img, xs, ys, maxW) {
+    const k = Math.min(maxW / img.width, 600 / img.height, 12), cv = mk(Math.round(img.width * k), Math.round(img.height * k)), g = cv.getContext('2d');
+    const src = mk(img.width, img.height); src.getContext('2d').putImageData(img, 0, 0);
+    g.imageSmoothingEnabled = false; g.drawImage(src, 0, 0, cv.width, cv.height);
+    const edges = cs => { const step = cs.length > 1 ? cs[1] - cs[0] : 10, out = [cs[0] - step / 2];
+      for (let i = 0; i + 1 < cs.length; i++) out.push((cs[i] + cs[i + 1]) / 2); out.push(cs[cs.length - 1] + step / 2); return out; };
+    const ex = edges(xs), ey = edges(ys), x0 = ex[0] * k, x1 = ex[ex.length - 1] * k, y0 = ey[0] * k, y1 = ey[ey.length - 1] * k;
+    const line = (ax, ay, bx, by) => { for (const [w, c] of [[3, 'rgba(255,255,255,.85)'], [1, '#e0007a']]) { g.lineWidth = w; g.strokeStyle = c; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); } };
+    ex.forEach(x => line(x * k, y0, x * k, y1)); ey.forEach(y => line(x0, y * k, x1, y * k));
+    if (Math.min(cv.width / xs.length, cv.height / ys.length) >= 8) { g.fillStyle = '#e0007a';
+      for (const y of ys) for (const x of xs) { g.beginPath(); g.arc(x * k, y * k, 1.6, 0, 2 * Math.PI); g.fill(); } }
+    return cv;
+  }
+  /* Marks over a top-down picture canvas: red outlines (trouble), teal dots (keep exactly). */
+  function markCells(cv, cells, kind) {
+    const g = cv.getContext('2d'), k = cv._cell, lw = Math.max(2, Math.round(k / 6));
+    cells.forEach((row, r) => row.forEach((v, c) => { if (!v) return; const x = c * k, y = r * k;
+      if (kind === 'bad') { g.strokeStyle = '#fff'; g.lineWidth = lw + 2; g.strokeRect(x + lw / 2, y + lw / 2, k - lw, k - lw); g.strokeStyle = '#e0001b'; g.lineWidth = lw; g.strokeRect(x + lw / 2, y + lw / 2, k - lw, k - lw); }
+      else { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + k / 2, y + k / 2, Math.max(1.5, k * 0.18), 0, 2 * Math.PI); g.fill(); g.stroke(); } }));
+  }
+  root.MosaicRender = { drawGridCheck, markCells, drawGrid, drawTopDown, drawEdit, drawChart, drawPreview };
 })(window);

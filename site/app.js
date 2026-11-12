@@ -2,7 +2,7 @@
   'use strict';
   const M = window.Mosaic, Rn = window.MosaicRender, $ = id => document.getElementById(id);
   const C = window.MosaicColors;
-  const st = { pixEdit: false, stEdit: false, paint: 0, pixHist: [], pixZoom: 1, stZoom: 1, plan: C.defaultPlan(), bank: C.loadBank(), selRow: null, img: null, det: null, samp: null, map: null, scale: 1, cands: [], sel: 0, bg: 0 };
+  const st = { tool: 'paint', keep: null, trouble: null, mergeMode: false, mergeFrom: null, pixEdit: false, stEdit: false, paint: 0, pixHist: [], pixZoom: 1, stZoom: 1, plan: C.defaultPlan(), bank: C.loadBank(), selRow: null, img: null, det: null, samp: null, map: null, scale: 1, cands: [], sel: 0, bg: 0 };
   function replace(id, cv) { const old = $(id); cv.id = id; old.replaceWith(cv); }
   function imgData(im) { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, c.width, c.height); }
   async function loadFile(file) {
@@ -10,11 +10,13 @@
     st.img = imgData(im); st.det = M.detectGrid(st.img); st.samp = st.det.sample();
     $('detect').textContent = `Detected ${st.samp.nx} × ${st.samp.ny} cells (${st.det.mode}), ${st.samp.palette.length} colors. Fix the counts below if they look wrong.`;
     $('nx').value = st.samp.nx; $('ny').value = st.samp.ny; $('sizeRow').classList.remove('hidden'); afterSample();
+    $('palNote').textContent = st.samp.palette.length > 6 ? `${st.samp.palette.length} colors found. If some look alike, tap Merge look-alikes in step 2 for a cleaner split.` : '';
   }
   function afterSample() {
     const s = st.samp, dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     st.bg = s.palette.reduce((b, c, i) => dist(c, st.det.bg) < dist(s.palette[b], st.det.bg) ? i : b, 0);
-    st.pixHist = []; st.paint = st.bg; $('pixBox').classList.remove('hidden'); $('pixNote').textContent = ''; drawOrig();
+    st.pixHist = []; st.paint = st.bg; st.keep = s.idx.map(r => r.map(() => 0)); st.mergeMode = false; st.mergeFrom = null; $('mergePick').classList.remove('on');
+    $('pixBox').classList.remove('hidden'); $('pixNote').textContent = ''; drawGridCheck();
     st.map = s.palette.length <= 2 ? s.palette.map((c, i) => i === st.bg ? 0 : 1) : M.autoSplit(s.idx, s.palette, st.bg);
     $('palSec').classList.toggle('hidden', s.palette.length <= 2); $('convSec').classList.remove('hidden'); drawPalette();
   }
@@ -23,16 +25,18 @@
     const box = $('swatches'); box.innerHTML = '';
     st.samp.palette.forEach((c, i) => { const d = document.createElement('div'); d.className = 'swatch ' + (st.map[i] ? 'B' : 'A');
       d.style.background = `rgb(${c})`; d.textContent = st.map[i] ? 'B' : 'A'; d.title = `${st.samp.counts[i]} cells`;
-      d.onclick = () => { st.map[i] = 1 - st.map[i]; drawPalette(); }; box.appendChild(d); });
-    drawPixPal(); const G = mono(); replace('monoCv', Rn.drawTopDown(G, [[250, 250, 250], [25, 25, 25]], Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length))))));
+      if (st.mergeMode && st.mergeFrom === i) d.classList.add('from');
+      d.onclick = () => { if (st.mergeMode) return mergeTap(i); st.map[i] = 1 - st.map[i]; drawPalette(); }; box.appendChild(d); });
+    drawPixPal(); const G = mono(), mc = Rn.drawTopDown(G, [[250, 250, 250], [25, 25, 25]], Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length)))));
+    findTrouble(); if (st.trouble) Rn.markCells(mc, st.trouble, 'bad'); replace('monoCv', mc); drawOrig();
   }
   function convert() {
     if (st.cands.some(r => r.hist && r.hist.length) && !confirm('Converting again makes new charts and replaces your stitch edits. Continue?')) return;
     $('status').textContent = 'Working…'; $('pixNote').textContent = '';
     setTimeout(() => {
-      const t0 = performance.now(); let motif = M.crop(mono()); if (st.scale > 1) motif = M.scale(motif, st.scale);
-      st.cands = M.findFixes(motif, { stretch: $('stretch').checked, keep: 3 });
-      st.cands.forEach(r => { r.F0 = r.F.map(x => x.slice()); r.mine = r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
+      const t0 = performance.now(), m = motifAndLock();
+      st.cands = M.findFixes(m.motif, { stretch: $('stretch').checked, keep: 3, lock: m.lock });
+      st.cands.forEach(r => { r.F0 = r.F.map(x => x.slice()); r.mine = r.L ? r.L.map(x => x.slice()) : r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
       const box = $('cands'); box.innerHTML = '';
       if (!st.cands.length) { $('status').textContent = 'No workable fix found.'; return; }
       st.cands.forEach((r, k) => {
@@ -41,7 +45,7 @@
         im.append(Rn.drawGrid(r.T, { cell }), Rn.drawGrid(r.F, { cell, hl }), Rn.drawGrid(M.simulate(r.X), { cell }));
         const black = r.T.flat().reduce((a, b) => a + b, 0);
         const p = document.createElement('p'); p.className = 'small';
-        p.innerHTML = `<b>Option ${k + 1}${k === 0 ? ' (best)' : ''}</b> · ${r.width + 2} sts × ${r.rows} rows · ${r.stretched ? 'rows stretched' : 'no stretch'} · +${r.added} stitches (${Math.round(100 * r.added / black)}%)${r.removed ? `, −${r.removed}` : ''} · ${r.simOK && r.valid ? '✔ simulation OK' : '✘ check failed'}`;
+        p.innerHTML = `<b>Option ${k + 1}${k === 0 ? ' (best)' : ''}</b> · ${r.width + 2} sts × ${r.rows} rows · ${r.stretched ? 'rows stretched' : 'no stretch'} · +${r.added} stitches (${Math.round(100 * r.added / black)}%)${r.removed ? `, −${r.removed}` : ''}${r.L ? (r.lockedChanged ? ` · <span class="warn">${r.lockedChanged} kept square${r.lockedChanged > 1 ? 's' : ''} changed</span>` : ' · kept squares unchanged') : ''} · ${r.simOK && r.valid ? '✔ simulation OK' : '✘ check failed'}`;
         d.append(im, p); d.onclick = () => { st.sel = k; [...box.children].forEach((e, j) => e.classList.toggle('sel', j === k)); show(true); }; box.appendChild(d);
       });
       $('status').textContent = `Done in ${Math.round(performance.now() - t0)} ms.`; st.sel = 0; show(true);
@@ -64,9 +68,11 @@
   const dl = (id, name) => { const a = document.createElement('a'); a.download = name; a.href = $(id).toDataURL('image/png'); a.click(); };
   $('file').onchange = e => e.target.files[0] && loadFile(e.target.files[0]);
   $('resample').onclick = () => { if (st.pixHist.length && !confirm('Re-reading the grid replaces your pixel edits. Continue?')) return; st.samp = st.det.sample(+$('nx').value, +$('ny').value); afterSample(); };
+  function drawGridCheck() { $('gridBox').classList.remove('hidden'); const w = Math.min(600, $('gridBox').clientWidth || 600);
+    replace('gridCv', Rn.drawGridCheck(st.img, st.samp.xs, st.samp.ys, w)); }
   $('autoBtn').onclick = () => { st.map = M.autoSplit(st.samp.idx, st.samp.palette, st.bg); drawPalette(); };
   $('thrBtn').onclick = () => { st.map = M.thresholdMap(st.samp.palette); st.map[st.bg] = 0; drawPalette(); };
-  document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.scale = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); });
+  document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.scale = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); if (st.samp) drawPalette(); });
   $('go').onclick = convert; $('dlChart').onclick = () => { const r = st.cands[st.sel], cv = Rn.drawChart(r.F, r.X, chartOpts(r, { legend: C.legend(st.plan, r.F.length) }));
     const a = document.createElement('a'); a.download = 'mosaic_chart.png'; a.href = cv.toDataURL('image/png'); a.click(); };
   function pick(hex) {
@@ -121,22 +127,73 @@
 
   // Before converting: edit the pixel art itself
   function drawOrig() { const s = st.samp, cv = Rn.drawTopDown(s.idx, s.palette, Math.max(4, Math.min(24, Math.floor(600 / Math.max(s.nx, s.ny)))), st.pixEdit);
+    if (st.trouble) Rn.markCells(cv, st.trouble, 'bad'); Rn.markCells(cv, st.keep, 'keep');
     replace('origCv', cv); applyZoom(cv, st.pixZoom);
-    if (st.pixEdit) paintable(cv, () => st.pixHist.push(s.idx.map(r => r.slice())),
-      (r, c) => { if (s.idx[r][c] === st.paint) return; s.idx[r][c] = st.paint; fillCell(cv, r, c, s.palette[st.paint]); },
+    if (st.pixEdit) paintable(cv, () => st.pixHist.push(pixSnap()),
+      (r, c) => { if (st.tool === 'paint') { if (s.idx[r][c] === st.paint) return; s.idx[r][c] = st.paint; fillCell(cv, r, c, s.palette[st.paint]); }
+        else { const v = st.tool === 'keep' ? 1 : 0; if (st.keep[r][c] === v) return; st.keep[r][c] = v; fillCell(cv, r, c, s.palette[s.idx[r][c]]); if (v) Rn.markCells(cv, st.keep.map((x, i) => x.map((y, j) => (i === r && j === c ? 1 : 0))), 'keep'); } },
       pixChanged);
     $('pixUndo').disabled = $('pixReset').disabled = !st.pixHist.length; }
+  const pixSnap = () => { const s = st.samp; return { idx: s.idx.map(r => r.slice()), keep: st.keep.map(r => r.slice()), palette: s.palette.map(c => c.slice()), counts: s.counts.slice(), map: st.map.slice(), bg: st.bg, paint: st.paint }; };
+  function pixRestore(h) { const s = st.samp; s.idx = h.idx; s.palette = h.palette; s.counts = h.counts; st.keep = h.keep; st.map = h.map; st.bg = h.bg; st.paint = h.paint; }
   function pixChanged() {
-    const s = st.samp; if (st.pixHist.length && JSON.stringify(st.pixHist[st.pixHist.length - 1]) === JSON.stringify(s.idx)) st.pixHist.pop();   // tap that changed nothing
+    const s = st.samp, h = st.pixHist[st.pixHist.length - 1];
+    if (h && JSON.stringify([h.idx, h.keep, h.palette]) === JSON.stringify([s.idx, st.keep, s.palette])) st.pixHist.pop();   // tap that changed nothing
     s.counts = s.palette.map(() => 0); s.idx.forEach(r => r.forEach(v => s.counts[v]++));
-    drawOrig(); drawPalette();
+    drawPalette();
     if (st.cands.length && st.pixHist.length) $('pixNote').textContent = 'Picture edited. Press Convert (step 3) to update the chart.'; }
+  /* Cropped (and scaled) two-color motif plus the matching keep-exactly mask, exactly as Convert uses them. */
+  function motifAndLock() {
+    const G = mono(); let y0 = G.length, y1 = -1, x0 = G[0].length, x1 = -1;
+    G.forEach((r, i) => r.forEach((v, j) => { if (v) { y0 = Math.min(y0, i); y1 = Math.max(y1, i); x0 = Math.min(x0, j); x1 = Math.max(x1, j); } }));
+    if (y1 < 0) { y0 = 0; y1 = G.length - 1; x0 = 0; x1 = G[0].length - 1; }
+    const cut = A => A.slice(y0, y1 + 1).map(r => r.slice(x0, x1 + 1)), sc = A => (st.scale > 1 ? M.scale(A, st.scale) : A);
+    const lock = sc(cut(st.keep));
+    return { motif: sc(cut(G)), lock: lock.some(r => r.some(v => v)) ? lock : null, y0, x0 };
+  }
+  /* Squares that can't be crocheted exactly as drawn (same rules as the converter), mapped back onto the picture. */
+  function findTrouble() {
+    const { motif, y0, x0 } = motifAndLock(), h = motif.length, s = st.scale, ones = new Array(h).fill(1);
+    if (!motif.some(r => r.some(v => v))) { st.trouble = null; $('troubleNote').textContent = ''; return; }
+    let best = null;
+    for (const b of [0, 1]) { const pc = M.problemCells(M.stretchRows(motif, ones, b)); if (!best || pc.n < best.pc.n) best = { b, pc }; }
+    const mark = st.samp.idx.map(r => r.map(() => 0)); let n = 0;
+    best.pc.bad.forEach((row, i) => row.forEach((v, c) => { const k = h - 1 - (i - best.b), mc = c - 1;
+      if (!v || k < 0 || k >= h || mc < 0 || mc >= motif[0].length) return; const y = y0 + Math.floor(k / s), x = x0 + Math.floor(mc / s); if (!mark[y][x]) { mark[y][x] = 1; n++; } }));
+    st.trouble = n ? mark : null; const k = best.pc.spots;
+    $('troubleNote').innerHTML = n ? `<b class="warn">⚠ ${k} trouble spot${k > 1 ? 's' : ''}${st.scale > 1 ? ` at ${st.scale}× scale` : ''}</b>, outlined red. In each, one of the red squares can't be crocheted as drawn, so the converter will change about ${k} square${k > 1 ? 's' : ''} near them. To choose what changes, edit them yourself, or mark important parts with Keep exactly.`
+      : `<b class="ok">✔ No trouble spots${st.scale > 1 ? ` at ${st.scale}× scale` : ''}.</b> This picture can be crocheted exactly as drawn (before any row stretching).`;
+  }
+  // Merging colors (keeps pixel edits)
+  function mergeTap(i) {
+    if (st.mergeFrom == null) { st.mergeFrom = i; $('palNote').textContent = 'Now tap the color to merge into it.'; drawPalette(); return; }
+    if (i === st.mergeFrom) { st.mergeFrom = null; $('palNote').textContent = 'Tap the color to keep, then the color to merge into it.'; drawPalette(); return; }
+    st.pixHist.push(pixSnap()); const keepI = st.mergeFrom, n = st.samp.counts[i];
+    remapMerge(keepI, i); st.mergeFrom = null; pixChanged();
+    $('palNote').textContent = `Merged ${n} square${n === 1 ? '' : 's'}. Tap two more colors to merge again, or tap Merge two colors to stop.`; }
+  function remapMerge(keepI, dropI) { const s = st.samp, fix = v => { v = v === dropI ? keepI : v; return v > dropI ? v - 1 : v; };
+    s.idx = s.idx.map(r => r.map(fix)); s.palette.splice(dropI, 1); st.map.splice(dropI, 1); st.bg = fix(st.bg); st.paint = fix(st.paint); }
+  $('mergePick').onclick = () => { st.mergeMode = !st.mergeMode; st.mergeFrom = null; $('mergePick').classList.toggle('on', st.mergeMode);
+    $('palNote').textContent = st.mergeMode ? 'Tap the color to keep, then the color to merge into it.' : ''; drawPalette(); };
+  $('mergeAuto').onclick = () => { const s = st.samp, d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), before = s.palette.length; let snapped = false;
+    while (s.palette.length > 2) { let best = null;
+      for (let i = 0; i < s.palette.length; i++) for (let j = i + 1; j < s.palette.length; j++) { const q = d(s.palette[i], s.palette[j]); if (q < 70 && (!best || q < best.q)) best = { i, j, q }; }
+      if (!best) break; if (!snapped) { st.pixHist.push(pixSnap()); snapped = true; }
+      const [keepI, dropI] = s.counts[best.i] >= s.counts[best.j] ? [best.i, best.j] : [best.j, best.i];
+      s.counts[keepI] += s.counts[dropI]; s.counts.splice(dropI, 1); remapMerge(keepI, dropI); }
+    if (!snapped) { $('palNote').textContent = 'No look-alike colors found. Use Merge two colors to merge any pair.'; return; }
+    pixChanged(); $('palNote').textContent = `Merged ${before - s.palette.length} look-alike color${before - s.palette.length > 1 ? 's' : ''}: ${before} → ${s.palette.length} colors. Undo is in step 1.`; };
+  document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { st.tool = b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b));
+    $('pixPal').classList.toggle('hidden', st.tool !== 'paint');
+    $('toolHelp').textContent = { paint: 'Pick a color, then tap or drag on the picture. A / B shows which yarn that color becomes.',
+      keep: 'Tap or drag over details that must stay exactly as drawn, like eyes or letters (teal dots). The converter changes stitches around them instead.',
+      unkeep: 'Tap or drag over teal dots to remove them.' }[st.tool]; });
   function drawPixPal() { const box = $('pixPal'); box.innerHTML = '';
     st.samp.palette.forEach((c, i) => { const d = document.createElement('div'); d.className = 'psw' + (i === st.paint ? ' sel' : ''); d.style.background = `rgb(${c})`;
       d.textContent = st.map && st.map[i] ? 'B' : 'A'; d.title = 'Paint with this color'; d.onclick = () => { st.paint = i; drawPixPal(); }; box.appendChild(d); }); }
   $('pixEdit').onclick = () => { st.pixEdit = !st.pixEdit; $('pixEdit').classList.toggle('on', st.pixEdit); $('pixTools').classList.toggle('hidden', !st.pixEdit); drawOrig(); };
-  $('pixUndo').onclick = () => { if (!st.pixHist.length) return; st.samp.idx = st.pixHist.pop(); pixChanged(); };
-  $('pixReset').onclick = () => { if (!st.pixHist.length) return; st.samp.idx = st.pixHist[0]; st.pixHist = []; pixChanged(); $('pixNote').textContent = 'Pixel edits undone.'; };
+  $('pixUndo').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist.pop()); pixChanged(); };
+  $('pixReset').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist[0]); st.pixHist = []; pixChanged(); $('pixNote').textContent = 'Pixel edits, keeps and merges undone.'; };
   $('pixIn').onclick = () => zoom('pixZoom', 1, drawOrig); $('pixOut').onclick = () => zoom('pixZoom', -1, drawOrig);
 
   // After converting: edit the finished look; X's are recalculated from it

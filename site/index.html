@@ -6,14 +6,20 @@
  <p class="small" id="detect"></p>
  <div class="row hidden" id="sizeRow"><label>Columns <input type="number" id="nx" min="2" max="300"></label><label>Rows <input type="number" id="ny" min="2" max="300"></label>
  <button class="sec" id="resample">Re-read grid</button></div>
+ <details class="gridChk hidden" id="gridBox" open><summary>Check how your image was read</summary>
+  <p class="small">The pink lines should fall between the squares of your art, one box per square, with each dot inside a single color. If they drift, change Columns / Rows and press Re-read grid.</p>
+  <div class="out"><canvas id="gridCv"></canvas></div></details>
  <div class="editBox hidden" id="pixBox">
   <div class="row"><button class="sec" id="pixEdit">&#9998; Edit pixels</button><span class="zoom"><button class="sec" id="pixOut" title="Smaller">&minus;</button><button class="sec" id="pixIn" title="Bigger">+</button></span>
    <button class="sec" id="pixUndo" disabled>Undo</button><button class="sec" id="pixReset" disabled>Undo all</button></div>
-  <div class="hidden" id="pixTools"><p class="small">Pick a color, then tap or drag on the picture. A / B shows which yarn that color becomes.</p><div class="row" id="pixPal"></div></div>
+  <div class="hidden" id="pixTools"><div class="row"><span class="small">Tool:</span><button class="sec on" data-tool="paint">Paint</button><button class="sec" data-tool="keep">Keep exactly</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
+   <p class="small" id="toolHelp">Pick a color, then tap or drag on the picture. A / B shows which yarn that color becomes.</p><div class="row" id="pixPal"></div></div>
+  <p class="small" id="troubleNote"></p>
   <p class="small note" id="pixNote"></p></div>
  <div class="out"><canvas id="origCv"></canvas></div></section>
 <section class="hidden" id="palSec"><h2>2. Colors → A (background) / B (contrast)</h2><p class="small">Tap a swatch to switch it between A and B. Default is auto-split.</p>
- <div class="row" id="swatches"></div><div class="row" style="margin-top:8px"><button class="sec" id="autoBtn">Auto-split</button><button class="sec" id="thrBtn">Brightness</button></div>
+ <div class="row" id="swatches"></div><div class="row" style="margin-top:8px"><button class="sec" id="autoBtn">Auto-split</button><button class="sec" id="thrBtn">Brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button></div>
+ <p class="small note" id="palNote"></p>
  <div class="out" style="margin-top:8px"><canvas id="monoCv"></canvas></div></section>
 <section class="hidden" id="convSec"><h2>3. Convert</h2><div class="row"><span>Scale:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button>
  <label><input type="checkbox" id="stretch" checked> try row stretching (±20% height)</label><button id="go">Convert</button></div>
@@ -26,7 +32,7 @@
    <button class="sec" id="stUndo" disabled>Undo</button><button class="sec" id="stFix" disabled>Fix around my edits</button><button class="sec" id="stReset" disabled>Undo all edits</button></div>
   <p class="small" id="stNote"></p>
   <div class="out"><canvas id="stCv"></canvas></div>
-  <p class="small edLegend"><span class="k bad"></span>can't be worked <span class="k mine"></span>your edit <span class="k auto"></span>adjusted by the fixer</p></div>
+  <p class="small edLegend"><span class="k bad"></span>can't be worked <span class="k mine"></span>your edit or kept square <span class="k auto"></span>adjusted by the fixer</p></div>
  <div class="bankBox"><div class="small"><b>Yarn colors.</b> Tap a row in the color strip at the left of the chart, then tap a color. That row's yarn (A or B) changes from there up, until the next change.</div>
   <div class="row" id="bank"></div>
   <div class="row"><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add</button><button class="sec" id="resetColors">Reset to white/black</button></div>
