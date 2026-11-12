@@ -11,7 +11,7 @@
   <div class="out"><canvas id="gridCv"></canvas></div></details>
  <div class="editBox hidden" id="pixBox">
   <div class="row"><button class="sec" id="pixEdit">&#9998; Edit pixels</button><span class="zoom"><button class="sec" id="pixOut" title="Smaller">&minus;</button><button class="sec" id="pixIn" title="Bigger">+</button></span>
-   <button class="sec" id="pixUndo" disabled>Undo</button><button class="sec" id="pixReset" disabled>Undo all</button></div>
+   <button class="sec" id="pixUndo" disabled>Undo</button><button class="sec" id="pixReset" disabled>Undo all</button><button class="sec" id="savePic">Save as piece</button></div>
   <div class="sizeTools"><div class="row"><span class="small lab">Rows</span><button class="sec" data-pad="top,1">+ top</button><button class="sec" data-pad="top,-1">− top</button><button class="sec" data-pad="bottom,1">+ bottom</button><button class="sec" data-pad="bottom,-1">− bottom</button></div>
    <div class="row"><span class="small lab">Columns</span><button class="sec" data-pad="left,1">+ left</button><button class="sec" data-pad="left,-1">− left</button><button class="sec" data-pad="right,1">+ right</button><button class="sec" data-pad="right,-1">− right</button></div>
    <div class="row"><button class="sec" id="padCenter">Center the picture</button><button class="sec" id="padTrim">Trim empty edges</button><span class="small" id="sizeNote"></span></div></div>
@@ -28,7 +28,7 @@
  <label><input type="checkbox" id="stretch" checked> try row stretching (±20% height)</label><button id="go">Convert</button></div>
  <p class="small" id="status"></p><p class="legend small">Each option: original · fixed (<span style="background:#eb7800"></span>added stitches) · simulated fabric</p>
  <div class="cands" id="cands"></div></section>
-<section class="hidden" id="outSec"><h2>4. Chart &amp; preview</h2><div class="row"><button id="dlChart">Download chart PNG</button><button class="sec" id="dlPrev">Download preview PNG</button><button id="mkPdf">Make pattern PDF</button></div>
+<section class="hidden" id="outSec"><h2>4. Chart &amp; preview</h2><div class="row"><button class="sec" id="saveChart">Save chart as piece</button><button id="dlChart">Download chart PNG</button><button class="sec" id="dlPrev">Download preview PNG</button><button id="mkPdf">Make pattern PDF</button></div>
  <p class="small" id="summary"></p>
  <div class="editBox" id="stBox"><div class="small"><b>Edit stitches.</b> This is how the finished piece will look. Turn on editing, then tap or drag to switch a square between A and B. The chart X's, written rows, previews and PDF update to match.</div>
   <div class="row"><button class="sec" id="stEdit">&#9998; Edit stitches</button><span class="zoom"><button class="sec" id="stOut" title="Smaller">&minus;</button><button class="sec" id="stIn" title="Bigger">+</button></span>
@@ -47,6 +47,23 @@
  <h2>Written directions</h2><div class="row"><button class="sec" id="copyTxt">Copy to clipboard</button><button class="sec" id="dlTxt">Download .txt</button><span class="small" id="txtNote"></span></div>
  <pre id="written" class="written"></pre><h2>Simulated fabric</h2><div class="out"><canvas id="fabCv"></canvas></div><h2>Design preview</h2><div class="out"><canvas id="prevCv"></canvas></div></section>
 </main>
+<section id="combSec"><h2>5. Combine charts</h2>
+ <p class="small">Save pieces with <b>Save as piece</b> (step 1, your picture) or <b>Save chart as piece</b> (step 4, a finished chart). Put them on the board, drag them into place, overlap, crop and mirror them. Then send the board to step 1 and convert it as one pattern.</p>
+ <h3>My pieces</h3><div class="lib" id="lib"></div><p class="small" id="libNote"></p>
+ <h3>Board</h3>
+ <div class="row"><label class="small">Width <input type="number" id="bw" min="4" max="400" value="40"></label><label class="small">Rows <input type="number" id="bh" min="4" max="400" value="30"></label>
+  <button class="sec" id="bFit">Fit to pieces</button><button class="sec" id="bClear">Clear board</button><span class="zoom"><button class="sec" id="bOut" title="Smaller">&minus;</button><button class="sec" id="bIn" title="Bigger">+</button></span></div>
+ <label class="small chk"><input type="checkbox" id="keepRows" checked> Keep chart pieces on their row pattern (they move up and down 2 rows at a time, so they stay crochetable as they are)</label>
+ <div class="boardWrap"><canvas id="boardCv"></canvas></div>
+ <div class="selBox" id="selBox" hidden>
+  <div class="small"><b id="selName"></b> <span id="selInfo"></span></div>
+  <div class="row"><span class="small lab">Move</span><button class="sec" data-mv="-1,0" title="Left">←</button><button class="sec" data-mv="0,-1" title="Up">↑</button><button class="sec" data-mv="0,1" title="Down">↓</button><button class="sec" data-mv="1,0" title="Right">→</button></div>
+  <div class="row"><span class="small lab">Crop</span><button class="sec" data-crop="t,1">top −</button><button class="sec" data-crop="t,-1">top +</button><button class="sec" data-crop="b,1">bottom −</button><button class="sec" data-crop="b,-1">bottom +</button></div>
+  <div class="row"><span class="small lab"></span><button class="sec" data-crop="l,1">left −</button><button class="sec" data-crop="l,-1">left +</button><button class="sec" data-crop="r,1">right −</button><button class="sec" data-crop="r,-1">right +</button></div>
+  <div class="row"><button class="sec" id="pMirror">Mirror ↔</button><button class="sec" id="pFront">Bring to front</button><button class="sec" id="pBack">Send to back</button><button class="sec" id="pDup">Duplicate</button><button class="sec" id="pClear"></button><button class="sec" id="pDel">Remove</button></div>
+  <p class="small" id="selNote"></p></div>
+ <div class="row"><button id="useBoard">Use this board as my picture</button><span class="small" id="boardNote"></span></div>
+</section>
 <footer class="shop">Shop patterns: <a href="https://www.ravelry.com/designers/the-yarn-side" target="_blank" rel="noopener">The Yarn Side on Ravelry</a></footer>
 <dialog id="pdfDlg"><form method="dialog" id="pdfForm"><h2>Make pattern PDF</h2>
  <label>Title <b>*</b><br><input type="text" id="pdfTitle" required maxlength="60" placeholder="e.g. Peekaboo Kitty"></label>
@@ -56,4 +73,5 @@
  <label>Finished project<br><select id="pdfProject"><option value="chart">Chart only (no finishing page)</option><option value="blanket" selected>Blanket (envelope border)</option><option value="pillow">Pillow</option><option value="wall">Wall hanging (envelope border + hanging)</option></select></label>
  <label id="pdfBorderWrap">Border / joining color<br><select id="pdfBorder"><option value="A">Same as Color A</option><option value="B">Same as Color B</option><option value="C">Its own color</option></select></label>
  <p class="small">Size is estimated for worsted (#4) yarn and an H (5.0 mm) hook at 15 sts x 15 rows = 4".</p>
- <div class="row"><button type="submit" id="pdfGo" value="go">Make PDF</button><button type="button" class="sec" id="pdfCancel">Cancel</button><span class="small" id="pdfNote"></span></div></form></dialog><script src="engine.js"></script><script src="render.js"></script><script src="colors.js"></script><script src="written.js"></script><script src="vendor/jspdf.umd.min.js"></script><script src="pdf.js"></script><script src="app.js"></script></body></html>
+ <div class="row"><button type="submit" id="pdfGo" value="go">Make PDF</button><button type="button" class="sec" id="pdfCancel">Cancel</button><span class="small" id="pdfNote"></span></div></form></dialog><script src="engine.js"></script><script src="render.js"></script><script src="colors.js"></script><script src="written.js"></script><script src="vendor/jspdf.umd.min.js"></script><script src="pdf.js"></script><script src="combine.js"></script>
+<script src="app.js"></script></body></html>

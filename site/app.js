@@ -332,5 +332,35 @@
   ['hexC', 'hexD'].forEach((id, k) => { $(id).oninput = () => { st.extraHex[k] = $(id).value; st.hexTouched[k] = true; if (st.cands.length) show(); drawPalette(); }; });
   $('stIn').onclick = () => zoom('stZoom', 1, drawSt); $('stOut').onclick = () => zoom('stZoom', -1, drawSt);
 
+  // ---- Pieces for the Combine board ----
+  const pieceHex = () => ({ A: toHex(roleRGB('A')), B: toHex(roleRGB('B')), C: st.extraHex[0], D: st.extraHex[1] });
+  /* the picture from step 1-2: each square's letter (top row first) */
+  function pieceFromPicture() { if (!st.samp) return null;
+    return { kind: 'picture', rows: st.samp.idx.map(r => r.map(v => roleOf(v)).join('')), hex: pieceHex() }; }
+  /* the finished look of the chart in step 4, including hand edits and C / D stitches */
+  function pieceFromChart() { const r = cur(); if (!r) return null; const H = r.F.length, rows = [];
+    for (let i = H - 1; i >= 0; i--) rows.push(r.F[i].map((v, c) => { const s = i + 1 < H && r.X[i + 1][c] ? i + 1 : i, y = r.Y ? r.Y[s][c] : 0; return y ? 'CD'[y - 1] : v ? 'B' : 'A'; }).join(''));
+    return { kind: 'chart', rows, hex: { A: C.hexAt(st.plan, 1), B: C.hexAt(st.plan, 2), C: st.extraHex[0], D: st.extraHex[1] } }; }
+  /* load a combined board into step 1 as if it were an uploaded picture, letters already set */
+  function loadBoardGrid(rows, hex) {
+    if (st.pixHist.length && !confirm('Using the board replaces the picture in step 1 and your pixel edits. Continue?')) return false;
+    const ny = rows.length, nx = rows[0].length, K = 10, used = ['A', 'B', 'C', 'D'].filter(L => L === 'A' || rows.some(r => r.includes(L)));
+    const palette = used.map(L => C.hexToRgb(hex[L])), idx = rows.map(r => [...r].map(L => used.indexOf(L))), counts = palette.map(() => 0);
+    idx.forEach(r => r.forEach(v => counts[v]++));
+    const cv = document.createElement('canvas'); cv.width = nx * K; cv.height = ny * K; const g = cv.getContext('2d');
+    idx.forEach((r, y) => r.forEach((v, x) => { g.fillStyle = `rgb(${palette[v]})`; g.fillRect(x * K, y * K, K, K); }));
+    const xs = [...Array(nx).keys()].map(x => x * K + K / 2 - .5), ys = [...Array(ny).keys()].map(y => y * K + K / 2 - .5);
+    const samp = () => ({ idx: idx.map(r => r.slice()), palette: palette.map(c => c.slice()), counts: counts.slice(), nx, ny, xs, ys });
+    st.img = g.getImageData(0, 0, cv.width, cv.height); st.det = { mode: 'combined board', bg: palette[0], bbox: [0, 0, cv.width - 1, cv.height - 1], xs, ys, sample: samp };
+    if (hex.C) { st.extraHex[0] = hex.C; st.hexTouched[0] = true; } if (hex.D) { st.extraHex[1] = hex.D; st.hexTouched[1] = true; }
+    st.samp = samp(); $('detect').textContent = `Loaded the combined board: ${nx} × ${ny} squares, ${used.length} colors (${used.join(', ')}).`;
+    $('nx').value = nx; $('ny').value = ny; $('sizeRow').classList.remove('hidden'); afterSample();
+    used.forEach((L, i) => setRole(i, L)); drawPalette(); $('palNote').textContent = '';
+    st.cands = []; $('outSec').classList.add('hidden'); $('cands').innerHTML = ''; $('status').textContent = 'Board loaded. Press Convert.';
+    return true; }
+  $('savePic').onclick = () => window.MosaicCombine && window.MosaicCombine.save(pieceFromPicture());
+  $('saveChart').onclick = () => window.MosaicCombine && window.MosaicCombine.save(pieceFromChart());
+  window.MosaicApp = { loadBoardGrid };
+
   window._mosaicState = st;
 })();

@@ -37,3 +37,9 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .roles{display:flex;gap:2px}.roles button{width:25px;height:27px;padding:0;font-size:.8rem;font-weight:700;border-radius:5px;background:#ece5da;color:#2b2622;border:none}.roles button.on{background:#125765;color:#fff}
 #swatches{gap:12px}
 .gsym{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:-1px;min-width:42px;justify-content:center}
+.lib{display:flex;flex-wrap:wrap;gap:10px}.piece{background:#f6f1ea;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:5px;width:150px}
+.piece canvas{image-rendering:pixelated;max-width:100%;max-height:90px;align-self:center;border:1px solid #d9d0c3;background:#fff}
+.piece .pname{width:100%;font:inherit;font-size:.85rem;padding:4px 6px;border:1px solid #d9d0c3;border-radius:6px}.piece .row{gap:4px;margin:0}.piece button{padding:6px 8px;font-size:.8rem}
+.boardWrap{overflow:auto;max-width:100%;border:1px solid #e3dbcf;border-radius:8px;margin:8px 0;background:#fff}#boardCv{display:block;touch-action:none;cursor:grab}
+.selBox{background:#f6f1ea;border-radius:10px;padding:10px;margin:8px 0}.selBox .row{gap:6px;margin:5px 0;align-items:center}.selBox .lab{width:44px;font-weight:600}.selBox button{padding:7px 10px;font-size:.85rem}
+.chk{display:flex;gap:6px;align-items:flex-start;margin:6px 0}#combSec h3{margin:14px 0 6px;font-size:1rem}#combSec input[type=number]{width:64px}
