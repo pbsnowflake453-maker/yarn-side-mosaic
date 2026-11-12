@@ -24,13 +24,15 @@
     for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) F[i][c] = (i + 1 < H && X[i + 1][c]) ? color(i + 2) : color(i + 1);
     return F;
   }
-  function stretchRows(motif, mults, bottom, side = 1) {
+  /* side = empty columns added on each side; pad = add an empty top row when needed so the top row is an A row.
+     The design editor uses side 0, pad false: the size stays exactly as the designer made it. */
+  function stretchRows(motif, mults, bottom, side = 1, pad = true) {
     const W = motif[0].length, rows = [];
     for (let k = motif.length - 1; k >= 0; k--) for (let m = 0; m < mults[k]; m++) rows.push(motif[k].slice());
     let T = [];
     for (let b = 0; b < bottom; b++) T.push(new Array(W).fill(0));
     T = T.concat(rows);
-    if (T.length % 2 === 0) T.push(new Array(W).fill(0));
+    if (pad && T.length % 2 === 0) T.push(new Array(W).fill(0));
     return T.map(r => new Array(side).fill(0).concat(r, new Array(side).fill(0)));
   }
   function cellCost(T, i, c, v, P, lock) {
@@ -71,10 +73,11 @@
     }
     return n;
   }
-  function solve(motif, mults, bottom, protect, lock, extra) {
-    const T = stretchRows(motif, mults, bottom), P = stretchRows(protect || motif.map(r => r.map(() => 0)), mults, bottom);
-    const L = lock ? stretchRows(lock, mults, bottom) : null;   // "keep exactly" squares, stretched like the motif
-    const E = extra ? stretchRows(extra, mults, bottom) : null;
+  function solve(motif, mults, bottom, protect, lock, extra, exact) {
+    const sr = A => stretchRows(A, mults, bottom, exact ? 0 : 1, !exact);
+    const T = sr(motif), P = sr(protect || motif.map(r => r.map(() => 0)));
+    const L = lock ? sr(lock) : null;   // "keep exactly" squares, stretched like the motif
+    const E = extra ? sr(extra) : null;
     if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v) T[i][c] = color(i + 1); }));   // extra-strand squares sit in their own row
     const F = clone(T); let total = 0;
     for (let c = T[0].length - 1; c >= 0; c--) {
@@ -93,10 +96,11 @@
   function findFixes(motif, opts = {}) {
     const h = motif.length, maxMult = opts.maxMult || 2, budget = opts.budget || (h > 60 ? 150 : 600), R = rng(opts.seed || 1);
     const maxAspect = opts.maxAspect == null ? 0.2 : opts.maxAspect, seen = new Map();
-    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock, opts.extra); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
+    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock, opts.extra, opts.exact); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
     const ones = new Array(h).fill(1);
-    for (const b of [0, 1]) ev(ones, b);
-    if (opts.stretch !== false) for (const b of [0, 1]) {
+    const bottoms = opts.exact ? [0] : [0, 1];   // exact: never add a row at the bottom (that would shift every row)
+    for (const b of bottoms) ev(ones, b);
+    if (opts.stretch !== false) for (const b of bottoms) {
       let cur = ones.slice(), cs = (ev(cur, b) || { score: 1e9 }).score;
       for (let t = 0; t < budget / 2; t++) {
         const cand = cur.slice(); cand[Math.floor(R() * h)] = 1 + Math.floor(R() * maxMult);
@@ -258,6 +262,16 @@
     G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v)) n++; else G[i][b] = v; }));
     return n; }
 
-  root.Mosaic = { groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
+  /* Fix a design in place: fewest changes, keeping locked squares (hand-painted, keep exactly) if at all possible.
+     E marks C / D squares (worked as an sc in that strand on their own row), which also need no dc right under them. */
+  function fixDesign(F, lock, E) {
+    const out = clone(F);
+    for (let c = 0; c < F[0].length; c++) { const res = columnDP(F, c, null, lock, E); if (!res) return null; for (let i = 0; i < F.length; i++) out[i][c] = res.path[i]; }
+    let changed = 0, lockedChanged = 0;
+    out.forEach((row, i) => row.forEach((v, c) => { if (v !== F[i][c]) { changed++; if (lock && lock[i][c]) lockedChanged++; } }));
+    return { F: out, changed, lockedChanged };
+  }
+
+  root.Mosaic = { fixDesign, groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
   if (typeof module !== 'undefined') module.exports = root.Mosaic;
 })(typeof window !== 'undefined' ? window : globalThis);

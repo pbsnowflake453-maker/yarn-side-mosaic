@@ -43,3 +43,11 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .boardWrap{overflow:auto;max-width:100%;border:1px solid #e3dbcf;border-radius:8px;margin:8px 0;background:#fff}#boardCv{display:block;touch-action:none;cursor:grab}
 .selBox{background:#f6f1ea;border-radius:10px;padding:10px;margin:8px 0}.selBox .row{gap:6px;margin:5px 0;align-items:center}.selBox .lab{width:44px;font-weight:600}.selBox button{padding:7px 10px;font-size:.85rem}
 .chk{display:flex;gap:6px;align-items:flex-start;margin:6px 0}#combSec h3{margin:14px 0 6px;font-size:1rem}#combSec input[type=number]{width:64px}
+.views{display:flex;gap:6px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:#f6f1ea;padding:8px max(12px,env(safe-area-inset-left,0px));border-bottom:1px solid #e3dbcf}
+.views button{flex:1;max-width:180px;background:#ece5da;color:#2b2622;border:none;font-weight:700;padding:10px 8px}.views button.on{background:#125765;color:#fff}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid #e3dbcf;margin-bottom:8px}.tabs button{background:none;color:#5d554e;border:none;border-radius:8px 8px 0 0;padding:8px 12px;font-weight:600}.tabs button.on{background:#125765;color:#fff}
+.tools{background:#f6f1ea;border-radius:10px;padding:6px 10px}.tools .row{gap:6px;margin:5px 0;align-items:center;flex-wrap:wrap}.tools .lab{width:40px;font-weight:600;color:#2b2622}
+.tools button{padding:7px 10px;font-size:.88rem;display:inline-flex;align-items:center;gap:5px}.tools .dot{width:12px;height:12px;border-radius:50%;border:1px solid #0004;display:inline-block}
+.dHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.dHead h2{margin:0}.dnote{min-height:2.6em}
+.sizeBox{margin:8px 0;background:#f6f1ea;border-radius:10px;padding:6px 10px}.sizeBox summary{cursor:pointer;font-weight:600}.sizeBox .row{gap:6px;margin:6px 0;align-items:center;flex-wrap:wrap}.sizeBox .lab{width:48px;font-weight:600}.sizeBox button{padding:7px 10px;font-size:.85rem}
+.optsBox{background:#f6f1ea;border-radius:10px;padding:8px 10px;margin:8px 0}.optsBox .cand button{margin-top:4px}#dCv{touch-action:none}

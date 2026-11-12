@@ -1,59 +1,73 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pixel → Overlay Mosaic Chart</title><link rel="stylesheet" href="style.css"></head><body>
-<header><h1>Pixel art → Overlay mosaic crochet chart</h1><p>Everything runs in your browser. Worked flat, bottom up, every row right to left.</p></header>
+<header><h1>The Yarn Side · Overlay mosaic designer</h1><p>Everything runs in your browser. Worked flat, bottom up, every row right to left.</p></header>
+<nav class="views" aria-label="Sections"><button data-view="start">Start</button><button data-view="design">Design</button><button data-view="combine">Combine</button></nav>
 <main>
-<section><h2>1. Upload pixel art</h2><div class="row"><input type="file" id="file" accept="image/*"></div>
- <p class="small" id="detect"></p>
- <div class="row hidden" id="sizeRow"><label>Columns <input type="number" id="nx" min="2" max="300"></label><label>Rows <input type="number" id="ny" min="2" max="300"></label>
- <button class="sec" id="resample">Re-read grid</button></div>
- <details class="gridChk hidden" id="gridBox" open><summary>Check how your image was read</summary>
-  <p class="small">The pink lines should fall between the squares of your art, one box per square, with each dot inside a single color. If they drift, change Columns / Rows and press Re-read grid.</p>
-  <div class="out"><canvas id="gridCv"></canvas></div></details>
- <div class="editBox hidden" id="pixBox">
-  <div class="row"><button class="sec" id="pixEdit">&#9998; Edit pixels</button><span class="zoom"><button class="sec" id="pixOut" title="Smaller">&minus;</button><button class="sec" id="pixIn" title="Bigger">+</button></span>
-   <button class="sec" id="pixUndo" disabled>Undo</button><button class="sec" id="pixReset" disabled>Undo all</button><button class="sec" id="savePic">Save as piece</button></div>
-  <div class="sizeTools"><div class="row"><span class="small lab">Rows</span><button class="sec" data-pad="top,1">+ top</button><button class="sec" data-pad="top,-1">− top</button><button class="sec" data-pad="bottom,1">+ bottom</button><button class="sec" data-pad="bottom,-1">− bottom</button></div>
-   <div class="row"><span class="small lab">Columns</span><button class="sec" data-pad="left,1">+ left</button><button class="sec" data-pad="left,-1">− left</button><button class="sec" data-pad="right,1">+ right</button><button class="sec" data-pad="right,-1">− right</button></div>
-   <div class="row"><button class="sec" id="padCenter">Center the picture</button><button class="sec" id="padTrim">Trim empty edges</button><span class="small" id="sizeNote"></span></div></div>
-  <div class="hidden" id="pixTools"><div class="row"><span class="small">Tool:</span><button class="sec on" data-tool="paint">Paint</button><button class="sec" data-tool="keep">Keep exactly</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
-   <p class="small" id="toolHelp">Pick a color, then tap or drag on the picture. A / B shows which yarn that color becomes.</p><div class="row" id="pixPal"></div></div>
-  <p class="small" id="troubleNote"></p>
-  <p class="small note" id="pixNote"></p></div>
- <div class="out"><canvas id="origCv"></canvas></div></section>
-<section class="hidden" id="palSec"><h2>2. Colors → A, B, and carried strands C / D</h2><p class="small">Under each color, tap the letter it should be: A (background), B (contrast), or C / D, extra strands carried along the row and swapped in where the picture uses them. Default is a two-color auto-split.</p>
- <div class="row" id="swatches"></div><div class="row" style="margin-top:8px"><button class="sec" id="autoBtn">Auto-split</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">Brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button></div>
- <p class="small note" id="palNote"></p><p class="small" id="extraNote"></p>
- <div class="out" style="margin-top:8px"><canvas id="monoCv"></canvas></div></section>
-<section class="hidden" id="convSec"><h2>3. Convert</h2><div class="row"><span>Scale:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button>
- <label><input type="checkbox" id="stretch" checked> try row stretching (±20% height)</label><button id="go">Convert</button></div>
- <p class="small" id="status"></p><p class="legend small">Each option: original · fixed (<span style="background:#eb7800"></span>added stitches) · simulated fabric</p>
- <div class="cands" id="cands"></div></section>
-<section class="hidden" id="outSec"><h2>4. Chart &amp; preview</h2><div class="row"><button class="sec" id="saveChart">Save chart as piece</button><button id="dlChart">Download chart PNG</button><button class="sec" id="dlPrev">Download preview PNG</button><button id="mkPdf">Make pattern PDF</button></div>
+<div id="startView">
+<section><h2>Start from a picture</h2>
+ <p class="small">Upload pixel art, check the grid, and pick a letter for each color. Then tap <b>Start designing</b>. You only do this once per picture; everything else happens in Design. To open a saved piece or a board instead, go to Combine.</p>
+ <div class="row"><input type="file" id="file" accept="image/*"></div>
+ <p class="small" id="detect"></p><p class="small" id="startNote"></p>
+ <div id="readBox" hidden>
+  <details class="gridChk" open><summary>Check how your picture was read</summary>
+   <p class="small">The pink lines should fall between the squares of your art, one box per square, with each dot inside a single color. If they drift, change the counts and tap Re-read.</p>
+   <div class="row"><label>Columns <input type="number" id="nx" min="2" max="300"></label><label>Rows <input type="number" id="ny" min="2" max="300"></label><button class="sec" id="resample">Re-read</button></div>
+   <div class="out"><canvas id="gridCv"></canvas></div></details>
+  <h3>Colors → letters</h3>
+  <p class="small">Under each color, tap its letter: <b>A</b> background, <b>B</b> contrast, <b>C</b> / <b>D</b> extra strands carried along the row and swapped in where they show.</p>
+  <div class="row" id="swatches"></div>
+  <div class="row"><button class="sec" id="autoBtn">Auto A/B</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">By brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button><button class="sec" id="impUndo" disabled>Undo</button></div>
+  <p class="small note" id="palNote"></p>
+  <div class="out"><canvas id="monoCv"></canvas></div>
+  <div class="row"><span class="small">Size:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button><span class="small">each square becomes 1, 2×2 or 3×3 squares</span></div>
+  <div class="row"><button id="startDesign">Start designing</button><button class="sec" id="savePic">Save as piece</button></div>
+ </div>
+</section>
+</div>
+<div id="designView" hidden>
+<section>
+ <div class="dHead"><h2>Design</h2><span class="small" id="dSize"></span></div>
+ <div class="tools">
+  <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D"><i class="dot"></i>D</button><button class="sec" data-tool="keep">Keep</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
+  <div class="row"><span class="small lab">Lean</span><button class="sec gsym" data-tool="g1" title="2 dc in next st then sk 1">\|</button><button class="sec gsym" data-tool="g2" title="sk 1 then 2 dc in next st">|/</button><button class="sec gsym" data-tool="g3" title="sk 1 then 3 dc in next st then sk 1">\|/</button><button class="sec" data-tool="g0">No lean</button><label class="small chk"><input type="checkbox" id="showX"> Show X's</label></div>
+  <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button id="dFix" disabled>Fix</button><button class="sec" id="dOpts">More fix options</button><span class="zoom"><button class="sec" id="dOut" title="Smaller">&minus;</button><button class="sec" id="dIn" title="Bigger">+</button></span></div>
+ </div>
+ <p class="small dnote" id="dNote"></p>
+ <div class="out" id="dWrap"><canvas id="dCv"></canvas></div>
+ <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix</p>
+ <div class="optsBox" id="optsBox" hidden><div class="row"><b>Fix options</b><span class="small" id="optsNote"></span><button class="sec" id="optsClose">Close</button></div><div class="cands" id="opts"></div></div>
+ <details class="sizeBox"><summary>Rows &amp; columns</summary>
+  <div class="row"><span class="small lab">Top</span><button class="sec" data-rows="top,1">+ row</button><button class="sec" data-rows="top,-1">− row</button><span class="small lab">Bottom</span><button class="sec" data-rows="bottom,2">+ 2 rows</button><button class="sec" data-rows="bottom,-2">− 2 rows</button></div>
+  <div class="row"><span class="small lab">Left</span><button class="sec" data-cols="left,1">+ col</button><button class="sec" data-cols="left,-1">− col</button><span class="small lab">Right</span><button class="sec" data-cols="right,1">+ col</button><button class="sec" data-cols="right,-1">− col</button></div>
+  <div class="row"><button class="sec" id="dCenter">Center</button><button class="sec" id="dTrim">Trim empty edges</button><button class="sec" id="dMirror">Mirror ↔</button></div>
+  <p class="small">Rows at the bottom come in pairs so row 1 stays an A row and the stitches above don't shift.</p></details>
+ <details class="sizeBox" open><summary>Yarn colors</summary>
+  <div class="row"><label class="small hexLab">A <input type="color" id="colA"></label><label class="small hexLab">B <input type="color" id="colB"></label><label class="small hexLab">C <input type="color" id="colC"></label><label class="small hexLab">D <input type="color" id="colD"></label></div>
+  <p class="small">Stripes (changing A or B partway up) are set on the Chart tab below.</p></details>
+ <div class="row"><button class="sec" id="saveDesign">Save design as piece</button><button id="mkPdf">Make pattern PDF</button></div>
+</section>
+<section>
+ <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Design preview</button><button data-tab="fabric">Fabric</button></nav>
  <p class="small" id="summary"></p>
- <div class="editBox" id="stBox"><div class="small"><b>Edit stitches.</b> This is how the finished piece will look. Turn on editing, then tap or drag to switch a square between A and B. The chart X's, written rows, previews and PDF update to match.</div>
-  <div class="row"><button class="sec" id="stEdit">&#9998; Edit stitches</button><span class="zoom"><button class="sec" id="stOut" title="Smaller">&minus;</button><button class="sec" id="stIn" title="Bigger">+</button></span>
-   <button class="sec" id="stUndo" disabled>Undo</button><button class="sec" id="stFix" disabled>Fix around my edits</button><button class="sec" id="stReset" disabled>Undo all edits</button></div>
-  <div class="row stTools"><span class="small lab">Brush</span><button class="sec on" data-st="ab">A ↔ B</button><button class="sec" data-st="1"><i class="dot" id="dotC"></i>C</button><button class="sec" data-st="2"><i class="dot" id="dotD"></i>D</button><button class="sec" data-st="0">Remove C/D</button>
-   <label class="small hexLab">C <input type="color" id="hexC" value="#c8102e"></label><label class="small hexLab">D <input type="color" id="hexD" value="#2e8b57"></label></div>
-  <div class="row stTools"><span class="small lab">Lean</span><button class="sec gsym" data-st="g1" title="2 dc in next st then sk 1">\|</button><button class="sec gsym" data-st="g2" title="sk 1 then 2 dc in next st">|/</button><button class="sec gsym" data-st="g3" title="sk 1 then 3 dc in next st then sk 1">\|/</button><button class="sec" data-st="g0">No lean</button></div>
-  <p class="small" id="stNote"></p>
-  <div class="out"><canvas id="stCv"></canvas></div>
-  <p class="small edLegend"><span class="k bad"></span>can't be worked <span class="k mine"></span>your edit or kept square <span class="k auto"></span>adjusted by the fixer</p></div>
- <div class="bankBox"><div class="small"><b>Yarn colors.</b> Tap a row in the color strip at the left of the chart, then tap a color. That row's yarn (A or B) changes from there up, until the next change.</div>
-  <div class="row" id="bank"></div>
-  <div class="row"><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add</button><button class="sec" id="resetColors">Reset to white/black</button></div>
-  <p class="small note" id="colorNote"></p></div>
- <div class="out"><canvas id="chartCv"></canvas></div>
- <h2>Written directions</h2><div class="row"><button class="sec" id="copyTxt">Copy to clipboard</button><button class="sec" id="dlTxt">Download .txt</button><span class="small" id="txtNote"></span></div>
- <pre id="written" class="written"></pre><h2>Simulated fabric</h2><div class="out"><canvas id="fabCv"></canvas></div><h2>Design preview</h2><div class="out"><canvas id="prevCv"></canvas></div></section>
-</main>
-<section id="combSec"><h2>5. Combine charts</h2>
- <p class="small">Save pieces with <b>Save as piece</b> (step 1, your picture) or <b>Save chart as piece</b> (step 4, a finished chart). Put them on the board, drag them into place, overlap, crop and mirror them. Then send the board to step 1 and convert it as one pattern.</p>
+ <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
+  <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color: that row's yarn (A or B) changes from there up.</div>
+   <div class="row" id="bank"></div>
+   <div class="row"><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add</button><button class="sec" id="resetStripes">Remove stripes</button></div>
+   <p class="small note" id="colorNote"></p></div>
+  <div class="out"><canvas id="chartCv"></canvas></div></div>
+ <div id="writtenTab" hidden><div class="row"><button class="sec" id="copyTxt">Copy to clipboard</button><button class="sec" id="dlTxt">Download .txt</button><span class="small" id="txtNote"></span></div><pre id="written" class="written"></pre></div>
+ <div id="previewTab" hidden><div class="row"><button class="sec" id="dlPrev">Download preview PNG</button></div><div class="out"><canvas id="prevCv"></canvas></div></div>
+ <div id="fabricTab" hidden><p class="small">Each square in its final color, worked out from the stitches.</p><div class="out"><canvas id="fabCv"></canvas></div></div>
+</section>
+</div>
+<div id="combineView" hidden>
+<section><h2>Combine charts</h2>
+ <p class="small">Save pieces with <b>Save as piece</b> (in Start, your picture) or <b>Save design as piece</b> (in Design). Put them on the board, drag them into place, overlap, crop and mirror them. Then open the board in Design and keep going there.</p>
  <h3>My pieces</h3><div class="lib" id="lib"></div><p class="small" id="libNote"></p>
  <h3>Board</h3>
  <div class="row"><label class="small">Width <input type="number" id="bw" min="4" max="400" value="40"></label><label class="small">Rows <input type="number" id="bh" min="4" max="400" value="30"></label>
   <button class="sec" id="bFit">Fit to pieces</button><button class="sec" id="bClear">Clear board</button><span class="zoom"><button class="sec" id="bOut" title="Smaller">&minus;</button><button class="sec" id="bIn" title="Bigger">+</button></span></div>
- <label class="small chk"><input type="checkbox" id="keepRows" checked> Keep chart pieces on their row pattern (they move up and down 2 rows at a time, so they stay crochetable as they are)</label>
+ <label class="small chk"><input type="checkbox" id="keepRows" checked> Keep design pieces on their row pattern (they move up and down 2 rows at a time, so they stay crochetable as they are)</label>
  <div class="boardWrap"><canvas id="boardCv"></canvas></div>
  <div class="selBox" id="selBox" hidden>
   <div class="small"><b id="selName"></b> <span id="selInfo"></span></div>
@@ -62,8 +76,10 @@
   <div class="row"><span class="small lab"></span><button class="sec" data-crop="l,1">left −</button><button class="sec" data-crop="l,-1">left +</button><button class="sec" data-crop="r,1">right −</button><button class="sec" data-crop="r,-1">right +</button></div>
   <div class="row"><button class="sec" id="pMirror">Mirror ↔</button><button class="sec" id="pFront">Bring to front</button><button class="sec" id="pBack">Send to back</button><button class="sec" id="pDup">Duplicate</button><button class="sec" id="pClear"></button><button class="sec" id="pDel">Remove</button></div>
   <p class="small" id="selNote"></p></div>
- <div class="row"><button id="useBoard">Use this board as my picture</button><span class="small" id="boardNote"></span></div>
+ <div class="row"><button id="useBoard">Open board in Design</button><span class="small" id="boardNote"></span></div>
 </section>
+</div>
+</main>
 <footer class="shop">Shop patterns: <a href="https://www.ravelry.com/designers/the-yarn-side" target="_blank" rel="noopener">The Yarn Side on Ravelry</a></footer>
 <dialog id="pdfDlg"><form method="dialog" id="pdfForm"><h2>Make pattern PDF</h2>
  <label>Title <b>*</b><br><input type="text" id="pdfTitle" required maxlength="60" placeholder="e.g. Peekaboo Kitty"></label>

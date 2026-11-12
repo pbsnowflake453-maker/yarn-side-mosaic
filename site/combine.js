@@ -1,5 +1,5 @@
 /* Combine charts: a library of saved pieces and a board to place, overlap, crop and mirror them on.
-   A piece is a grid of letters (A, B, C, D; top row first). The board is sent back to step 1 as one picture. */
+   A piece is a grid of letters (A, B, C, D; top row first). The board opens in the Design editor. */
 (function (root) {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -28,11 +28,17 @@
     const { h } = dims(it), boardRow = st.board.h - (it.y + h) + 1, pieceRow = it.crop.b + 1; return (boardRow - pieceRow) % 2 === 0; }
 
   /* ---------- composing ---------- */
-  function compose() { const { w, h, items } = st.board, G = [...Array(h)].map(() => new Array(w).fill('A'));
-    for (const it of items) { if (!piece(it.pid)) continue; const d = dims(it);
+  /* letters for the whole board, plus the leaning groups of chart pieces that sit on their row pattern
+     (a group is dropped when a piece above covers any of its squares) */
+  function compose() { const { w, h, items } = st.board, G = [...Array(h)].map(() => new Array(w).fill('A')); let groups = [];
+    const touches = (g, by, bx) => (by === g[0] || by === g[0] + 1) && bx >= g[1] - 1 && bx <= g[1] + 1;
+    for (const it of items) { const p = piece(it.pid); if (!p) continue; const d = dims(it), Wf = fullW(p);
       for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) { const by = it.y + y, bx = it.x + x; if (by < 0 || bx < 0 || by >= h || bx >= w) continue;
-        const L = cellOf(it, y, x); if (L === 'A' && it.clear) continue; G[by][bx] = L; } }
-    return G; }
+        const L = cellOf(it, y, x); if (L === 'A' && it.clear) continue; G[by][bx] = L; if (groups.length) groups = groups.filter(g => !touches(g, by, bx)); }
+      if (p.kind === 'chart' && p.groups && rowsOK(it)) p.groups.forEach(([t, col, bits]) => {
+        const y = t - it.crop.t, x = it.flip ? Wf - 1 - col - it.crop.l : col - it.crop.l, b = it.flip ? ((bits & 1) << 1) | ((bits & 2) >> 1) : bits;
+        if (y < 0 || y >= d.h || x < 0 || x >= d.w) return; const by = it.y + y, bx = it.x + x; if (by >= 0 && by < h && bx >= 0 && bx < w) groups.push([by, bx, b]); }); }
+    G.groups = groups; return G; }
   /* board colors: each letter takes the color from the lowest piece that uses it */
   function boardHex() { const hex = { A: '#f4efe6', B: '#2b2622', C: '#c8102e', D: '#2e8b57' }, seen = {};
     for (const it of st.board.items) { const p = piece(it.pid); if (!p) continue; for (const L of 'ABCD') if (!seen[L] && p.rows.some(r => r.includes(L))) { seen[L] = 1; hex[L] = p.hex[L] || hex[L]; } }
@@ -59,31 +65,33 @@
       g.strokeRect(M + it.x * k + 1, M + it.y * k + 1, d.w * k - 1, d.h * k - 1); g.setLineDash([]);
       if (!ok) { g.fillStyle = '#d06a00'; g.font = 'bold 12px system-ui, sans-serif'; g.textAlign = 'left'; g.fillText('⚠', M + it.x * k + 3, M + it.y * k + 9); } });
     const n = items.filter(it => piece(it.pid)).length, off = items.filter(it => piece(it.pid) && !rowsOK(it)).length;
-    $('boardNote').innerHTML = !n ? 'Add pieces from My pieces above.' : off ? `<span class="warn">${off} chart piece${off > 1 ? 's are' : ' is'} off its row pattern (orange).</span> It still works: converting will re-fix the stitches, which may change a few squares.` : '';
+    $('boardNote').innerHTML = !n ? 'Add pieces from My pieces above.' : off ? `<span class="warn">${off} design piece${off > 1 ? 's are' : ' is'} off its row pattern (orange).</span> It still works, but it may need Fix in a few more places.` : '';
     $('useBoard').disabled = !n; $('bw').value = w; $('bh').value = h;
     drawSel();
   }
   function drawSel() { const it = st.board.items[st.sel], box = $('selBox'); box.hidden = !it; if (!it) return;
     const p = piece(it.pid), d = dims(it); $('selName').textContent = p.name;
-    $('selInfo').textContent = `· ${d.w} × ${d.h} squares · ${p.kind === 'chart' ? 'chart' : 'picture'}${it.flip ? ' · mirrored' : ''}`;
+    $('selInfo').textContent = `· ${d.w} × ${d.h} squares · ${p.kind === 'chart' ? 'design' : 'picture'}${it.flip ? ' · mirrored' : ''}`;
     $('pClear').textContent = it.clear ? 'Background: see-through' : 'Background: solid';
     $('selNote').innerHTML = p.kind !== 'chart' ? 'Pictures have no stitch pattern yet, so they can sit on any row.'
-      : rowsOK(it) ? '<span class="ok">✔ On its row pattern:</span> the stitches stay as they were in the chart, except where pieces overlap or touch.'
-      : '<span class="warn">Off its row pattern by one row.</span> Move it up or down one row to put it back, or leave it and the converter will re-fix it.'; }
+      : rowsOK(it) ? '<span class="ok">✔ On its row pattern:</span> the stitches stay as they were in the design, except where pieces overlap or touch.'
+      : '<span class="warn">Off its row pattern by one row.</span> Move it up or down one row to put it back, or leave it and use Fix in Design afterward.'; }
   function drawLib() { const box = $('lib'); box.innerHTML = '';
-    if (!st.lib.length) { $('libNote').textContent = 'No pieces yet. Use Save as piece in step 1 or Save chart as piece in step 4.'; return; }
+    if (!st.lib.length) { $('libNote').textContent = 'No pieces yet. Use Save as piece in Start, or Save design as piece in Design.'; return; }
     $('libNote').textContent = '';
     st.lib.forEach(p => { const card = document.createElement('div'); card.className = 'piece';
       const cv = document.createElement('canvas'), W = fullW(p), H = fullH(p), k = Math.max(1, Math.floor(84 / Math.max(W, H))); cv.width = W * k; cv.height = H * k;
       const g = cv.getContext('2d'); p.rows.forEach((r, y) => [...r].forEach((L, x) => { g.fillStyle = p.hex[L] || '#ccc'; g.fillRect(x * k, y * k, k, k); }));
       const name = document.createElement('input'); name.type = 'text'; name.value = p.name; name.className = 'pname'; name.setAttribute('aria-label', 'Piece name');
       name.onchange = () => { p.name = name.value.trim() || p.name; saveAll(); draw(); };
-      const info = document.createElement('div'); info.className = 'small'; info.textContent = `${W} × ${H} · ${p.kind}`;
+      const info = document.createElement('div'); info.className = 'small'; info.textContent = `${W} × ${H} · ${p.kind === 'chart' ? 'design' : 'picture'}`;
       const add = document.createElement('button'); add.textContent = 'Add to board'; add.onclick = () => addItem(p);
+      const open = document.createElement('button'); open.className = 'sec'; open.textContent = 'Open in Design';
+      open.onclick = () => root.MosaicApp.openDesign(p.rows, p.hex, p.groups || [], `Opened “${p.name}”. Nothing has been changed.`);
       const del = document.createElement('button'); del.className = 'sec'; del.textContent = 'Delete';
       del.onclick = () => { if (!confirm(`Delete "${p.name}"? It will also come off the board.`)) return; st.lib = st.lib.filter(q => q !== p);
         st.board.items = st.board.items.filter(it => it.pid !== p.id); st.sel = -1; saveAll(); drawLib(); draw(); };
-      const btns = document.createElement('div'); btns.className = 'row'; btns.append(add, del);
+      const btns = document.createElement('div'); btns.className = 'row'; btns.append(add, open, del);
       card.append(cv, name, info, btns); box.appendChild(card); }); }
 
   /* ---------- editing ---------- */
@@ -119,8 +127,10 @@
       if (it.x !== px || it.y !== py) draw(); };
     c.onpointerup = c.onpointercancel = () => { if (st.drag) { st.drag = null; saveAll(); } }; }
 
+  let bound = false;
   function init() {
     if (!$('boardCv')) return;
+    if (bound) { drawLib(); draw(); return; } bound = true;
     bindPointer();
     document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => { const it = st.board.items[st.sel]; if (!it) return; const [dx, dy] = b.dataset.mv.split(',').map(Number); move(it, dx, dy); });
     document.querySelectorAll('[data-crop]').forEach(b => b.onclick = () => { const it = st.board.items[st.sel]; if (!it) return; const [s, n] = b.dataset.crop.split(','); crop(it, s, +n); });
@@ -142,14 +152,13 @@
     $('bClear').onclick = () => { if (st.board.items.length && !confirm('Take every piece off the board? Your saved pieces stay in My pieces.')) return; st.board.items = []; st.sel = -1; saveAll(); draw(); };
     $('bIn').onclick = () => { st.zoom = Math.min(4, st.zoom * 1.5); draw(); }; $('bOut').onclick = () => { st.zoom = Math.max(.5, st.zoom / 1.5); draw(); };
     $('useBoard').onclick = () => { const G = compose(); if (!st.board.items.length) return;
-      if (root.MosaicApp.loadBoardGrid(G.map(r => r.join('')), boardHex())) window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      root.MosaicApp.openDesign(G.map(r => r.join('')), boardHex(), G.groups, 'Opened the board. Nothing has been changed: red squares are spots where pieces meet or overlap that can\'t be crocheted as drawn. Tap <b>Fix</b> when you\'re ready.'); };
     window.addEventListener('resize', () => draw());
     drawLib(); draw();
   }
-  function save(p) { if (!p) return; p.id = uid(); p.name = `${p.kind === 'chart' ? 'Chart' : 'Picture'} ${st.lib.length + 1}`; st.lib.push(p); saveAll(); drawLib();
-    $('libNote').textContent = `Saved "${p.name}" to My pieces (step 5). Tap its name to rename it.`;
-    const n = $('savePic'), m = $('saveChart'); [n, m].forEach(b => { if (b) { const t = b.textContent; if (!b.dataset.t) { b.dataset.t = t; } b.textContent = 'Saved ✔'; setTimeout(() => { b.textContent = b.dataset.t; }, 1500); } }); }
+  function save(p) { if (!p) return; p.id = uid(); p.name = `${p.kind === 'chart' ? 'Design' : 'Picture'} ${st.lib.length + 1}`; st.lib.push(p); saveAll(); drawLib();
+    $('libNote').textContent = `Saved "${p.name}" to My pieces. Tap its name to rename it.`; }
 
   root.MosaicCombine = { save, compose, init, _st: st };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+
 })(typeof window !== 'undefined' ? window : globalThis);
