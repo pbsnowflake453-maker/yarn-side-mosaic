@@ -28,6 +28,7 @@
     let best = null;   // first clean row (no X) within 3 rows of this yarn, else the fewest-X row within 2
     for (let q = start; q <= Math.min(hi, start + 6); q += 2) if (xCount(X, q) === 0) { best = { q, k: 0 }; break; }
     if (!best) for (let q = start; q <= Math.min(hi, start + 4); q += 2) { const k = xCount(X, q); if (!best || k < best.k) best = { q, k }; }
+    if (!best) return { plan, note: `No room for a new ${y} color here: each color needs at least 3 rows of its own.` };
     let note = '';
     if (best.q !== r) note = `Moved to row ${best.q} (from ${r}): ` + (r < lo || r > hi ? 'each color needs at least 3 rows of its own' : (best.k ? `row ${best.q} has the fewest X's nearby (${best.k}) dropping into the old shade` : `row ${best.q} has no X's, so no dropped stitch reaches into the old shade`)) + '.';
     else if (best.k) note = `Row ${r} has ${best.k} X's dropping into the previous shade (no cleaner row nearby).`;

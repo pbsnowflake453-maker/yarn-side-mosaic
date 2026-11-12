@@ -30,3 +30,6 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .gridChk{margin:10px 0}.gridChk summary{cursor:pointer;font-weight:600;font-size:.92rem}.gridChk .out{margin-top:6px}
 .swatch.from{outline:3px dashed #125765;outline-offset:2px}
 .sizeTools{border-top:1px solid #e3dbcf;margin-top:6px;padding-top:4px}.sizeTools .row{margin:4px 0;gap:6px}.sizeTools button{padding:6px 8px;font-size:.82rem}.sizeTools .lab{width:58px;font-weight:600;color:#2b2622}
+.swatch.C{outline:3px dotted #2b2622}.swatch.D{outline:3px double #2b2622;outline-offset:1px}
+.stTools{gap:6px;align-items:center}.stTools .lab{font-weight:600;color:#2b2622}.stTools button{padding:7px 10px;font-size:.88rem;display:inline-flex;align-items:center;gap:5px}
+.stTools .dot{width:12px;height:12px;border-radius:50%;border:1px solid #0004;display:inline-block}.hexLab{display:inline-flex;align-items:center;gap:4px}.hexLab input{width:36px;height:28px;padding:0;border:1px solid #bbb;border-radius:6px;background:none}

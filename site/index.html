@@ -20,9 +20,9 @@
   <p class="small" id="troubleNote"></p>
   <p class="small note" id="pixNote"></p></div>
  <div class="out"><canvas id="origCv"></canvas></div></section>
-<section class="hidden" id="palSec"><h2>2. Colors → A (background) / B (contrast)</h2><p class="small">Tap a swatch to switch it between A and B. Default is auto-split.</p>
- <div class="row" id="swatches"></div><div class="row" style="margin-top:8px"><button class="sec" id="autoBtn">Auto-split</button><button class="sec" id="thrBtn">Brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button></div>
- <p class="small note" id="palNote"></p>
+<section class="hidden" id="palSec"><h2>2. Colors → A, B, and carried strands C / D</h2><p class="small">Tap a swatch to change its letter: A (background) → B (contrast) → C → D. C and D are extra strands carried along the row and swapped in where the picture uses them. Default is a two-color auto-split.</p>
+ <div class="row" id="swatches"></div><div class="row" style="margin-top:8px"><button class="sec" id="autoBtn">Auto-split</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">Brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button></div>
+ <p class="small note" id="palNote"></p><p class="small" id="extraNote"></p>
  <div class="out" style="margin-top:8px"><canvas id="monoCv"></canvas></div></section>
 <section class="hidden" id="convSec"><h2>3. Convert</h2><div class="row"><span>Scale:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button>
  <label><input type="checkbox" id="stretch" checked> try row stretching (±20% height)</label><button id="go">Convert</button></div>
@@ -33,6 +33,8 @@
  <div class="editBox" id="stBox"><div class="small"><b>Edit stitches.</b> This is how the finished piece will look. Turn on editing, then tap or drag to switch a square between A and B. The chart X's, written rows, previews and PDF update to match.</div>
   <div class="row"><button class="sec" id="stEdit">&#9998; Edit stitches</button><span class="zoom"><button class="sec" id="stOut" title="Smaller">&minus;</button><button class="sec" id="stIn" title="Bigger">+</button></span>
    <button class="sec" id="stUndo" disabled>Undo</button><button class="sec" id="stFix" disabled>Fix around my edits</button><button class="sec" id="stReset" disabled>Undo all edits</button></div>
+  <div class="row stTools"><span class="small lab">Brush</span><button class="sec on" data-st="ab">A ↔ B</button><button class="sec" data-st="1"><i class="dot" id="dotC"></i>C</button><button class="sec" data-st="2"><i class="dot" id="dotD"></i>D</button><button class="sec" data-st="0">Remove C/D</button>
+   <label class="small hexLab">C <input type="color" id="hexC" value="#c8102e"></label><label class="small hexLab">D <input type="color" id="hexD" value="#2e8b57"></label></div>
   <p class="small" id="stNote"></p>
   <div class="out"><canvas id="stCv"></canvas></div>
   <p class="small edLegend"><span class="k bad"></span>can't be worked <span class="k mine"></span>your edit or kept square <span class="k auto"></span>adjusted by the fixer</p></div>

@@ -42,13 +42,16 @@
     if ((at(i, c - 1) && at(i, c + 1)) || (at(i - 1, c) && at(i + 1, c))) return 2.5; // merge cost
     return nb ? 1 : 3;
   }
-  function columnDP(T, c, P, lock) {
+  /* E = extra-strand mask (0 none, 1 = C, 2 = D): those cells are worked as an sc in the extra strand, so they must
+     show their own row (no dc from above) and the cell under them must not need a dc (that dc would be the extra cell's stitch). */
+  function columnDP(T, c, P, lock, E) {
     const H = T.length; let best = new Map([[false, { cost: 0, path: [] }]]);
     for (let i = 0; i < H; i++) {
       const r = i + 1, nxt = new Map();
       for (const [pm, st] of best) for (const v of [T[i][c], 1 - T[i][c]]) {
         const m = v !== color(r);
         if (m && pm) continue; if (m && i === H - 1) continue;
+        if (E && E[i][c] && (m || pm)) continue;
         const k = st.cost + cellCost(T, i, c, v, P, lock);
         if (!nxt.has(m) || k < nxt.get(m).cost) nxt.set(m, { cost: k, path: st.path.concat([v]) });
       }
@@ -68,16 +71,18 @@
     }
     return n;
   }
-  function solve(motif, mults, bottom, protect, lock) {
+  function solve(motif, mults, bottom, protect, lock, extra) {
     const T = stretchRows(motif, mults, bottom), P = stretchRows(protect || motif.map(r => r.map(() => 0)), mults, bottom);
     const L = lock ? stretchRows(lock, mults, bottom) : null;   // "keep exactly" squares, stretched like the motif
+    const E = extra ? stretchRows(extra, mults, bottom) : null;
+    if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v) T[i][c] = color(i + 1); }));   // extra-strand squares sit in their own row
     const F = clone(T); let total = 0;
     for (let c = T[0].length - 1; c >= 0; c--) {
-      const res = columnDP(T, c, P, L); if (!res) return null;
+      const res = columnDP(T, c, P, L, E); if (!res) return null;
       total += res.cost; for (let i = 0; i < T.length; i++) F[i][c] = res.path[i];
     }
     total += 10 * Math.abs(components(F) - components(T));
-    return { cost: total, T, F, L, mults, bottom };
+    return { cost: total, T, F, L, E, mults, bottom };
   }
   function score(res, h) {
     const rows = res.mults.reduce((a, b) => a + b, 0), aspect = Math.abs(rows / h - 1);
@@ -88,7 +93,7 @@
   function findFixes(motif, opts = {}) {
     const h = motif.length, maxMult = opts.maxMult || 2, budget = opts.budget || (h > 60 ? 150 : 600), R = rng(opts.seed || 1);
     const maxAspect = opts.maxAspect == null ? 0.2 : opts.maxAspect, seen = new Map();
-    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
+    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock, opts.extra); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
     const ones = new Array(h).fill(1);
     for (const b of [0, 1]) ev(ones, b);
     if (opts.stretch !== false) for (const b of [0, 1]) {

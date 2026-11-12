@@ -2,7 +2,7 @@
   'use strict';
   const M = window.Mosaic, Rn = window.MosaicRender, $ = id => document.getElementById(id);
   const C = window.MosaicColors;
-  const st = { tool: 'paint', keep: null, trouble: null, mergeMode: false, mergeFrom: null, pixEdit: false, stEdit: false, paint: 0, pixHist: [], pixZoom: 1, stZoom: 1, plan: C.defaultPlan(), bank: C.loadBank(), selRow: null, img: null, det: null, samp: null, map: null, scale: 1, cands: [], sel: 0, bg: 0 };
+  const st = { extra: [], extraHex: ['#c8102e', '#2e8b57'], hexTouched: [false, false], stTool: 'ab', tool: 'paint', keep: null, trouble: null, mergeMode: false, mergeFrom: null, pixEdit: false, stEdit: false, paint: 0, pixHist: [], pixZoom: 1, stZoom: 1, plan: C.defaultPlan(), bank: C.loadBank(), selRow: null, img: null, det: null, samp: null, map: null, scale: 1, cands: [], sel: 0, bg: 0 };
   function replace(id, cv) { const old = $(id); cv.id = id; old.replaceWith(cv); }
   function imgData(im) { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, c.width, c.height); }
   async function loadFile(file) {
@@ -17,17 +17,26 @@
     st.bg = s.palette.reduce((b, c, i) => dist(c, st.det.bg) < dist(s.palette[b], st.det.bg) ? i : b, 0);
     st.pixHist = []; st.paint = st.bg; st.keep = s.idx.map(r => r.map(() => 0)); st.mergeMode = false; st.mergeFrom = null; $('mergePick').classList.remove('on');
     $('pixBox').classList.remove('hidden'); $('pixNote').textContent = ''; drawGridCheck();
-    st.map = s.palette.length <= 2 ? s.palette.map((c, i) => i === st.bg ? 0 : 1) : M.autoSplit(s.idx, s.palette, st.bg);
+    st.map = s.palette.length <= 2 ? s.palette.map((c, i) => i === st.bg ? 0 : 1) : M.autoSplit(s.idx, s.palette, st.bg); st.extra = s.palette.map(() => 0);
     $('palSec').classList.toggle('hidden', s.palette.length <= 2); $('convSec').classList.remove('hidden'); drawPalette();
   }
-  function mono() { return st.samp.idx.map(r => r.map(v => st.map[v])); }
+  function mono() { return st.samp.idx.map(r => r.map(v => (st.extra[v] ? 0 : st.map[v]))); }
+  const extraMask = () => st.samp.idx.map(r => r.map(v => st.extra[v] || 0));
+  const toHex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  const roleOf = i => (st.extra[i] ? ' CD'[st.extra[i]] : st.map[i] ? 'B' : 'A');
+  function setRole(i, role) { st.map[i] = role === 'B' ? 1 : 0; st.extra[i] = role === 'C' ? 1 : role === 'D' ? 2 : 0;
+    const k = st.extra[i] - 1; if (k >= 0 && !st.hexTouched[k]) st.extraHex[k] = toHex(st.samp.palette[i]); }   // C / D start as the picture's own color
   function drawPalette() {
     const box = $('swatches'); box.innerHTML = '';
-    st.samp.palette.forEach((c, i) => { const d = document.createElement('div'); d.className = 'swatch ' + (st.map[i] ? 'B' : 'A');
-      d.style.background = `rgb(${c})`; d.textContent = st.map[i] ? 'B' : 'A'; d.title = `${st.samp.counts[i]} cells`;
+    st.samp.palette.forEach((c, i) => { const d = document.createElement('div'), role = roleOf(i); d.className = 'swatch ' + role;
+      d.style.background = `rgb(${c})`; d.textContent = role; d.title = `${st.samp.counts[i]} cells`;
       if (st.mergeMode && st.mergeFrom === i) d.classList.add('from');
-      d.onclick = () => { if (st.mergeMode) return mergeTap(i); st.map[i] = 1 - st.map[i]; drawPalette(); }; box.appendChild(d); });
-    drawPixPal(); const G = mono(), mc = Rn.drawTopDown(G, [[250, 250, 250], [25, 25, 25]], Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length)))));
+      d.onclick = () => { if (st.mergeMode) return mergeTap(i); setRole(i, { A: 'B', B: 'C', C: 'D', D: 'A' }[role]); drawPalette(); }; box.appendChild(d); });
+    const used = [1, 2].filter(k => st.extra.includes(k)).map(k => ' CD'[k]);
+    $('extraNote').innerHTML = used.length ? `${used.join(' and ')} ${used.length > 1 ? 'are' : 'is a'} carried strand${used.length > 1 ? 's' : ''}: those squares become stitches worked in ${used.join(' / ')} on the A or B row they fall in. The converter keeps a dc from landing right under them, since that stitch can't be both.` : '';
+    $('hexC').value = st.extraHex[0]; $('hexD').value = st.extraHex[1]; $('dotC').style.background = st.extraHex[0]; $('dotD').style.background = st.extraHex[1];
+    drawPixPal(); const G = st.samp.idx.map(r => r.map(v => (st.extra[v] ? 1 + st.extra[v] : st.map[v]))),
+      mc = Rn.drawTopDown(G, [[250, 250, 250], [25, 25, 25]].concat(st.extraHex.map(C.hexToRgb)), Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length)))));
     findTrouble(); if (st.trouble) Rn.markCells(mc, st.trouble, 'bad'); replace('monoCv', mc); drawOrig();
   }
   function convert() {
@@ -35,8 +44,8 @@
     $('status').textContent = 'Working…'; $('pixNote').textContent = '';
     setTimeout(() => {
       const t0 = performance.now(), m = motifAndLock();
-      st.cands = M.findFixes(m.motif, { stretch: $('stretch').checked, keep: 3, lock: m.lock });
-      st.cands.forEach(r => { r.F0 = r.F.map(x => x.slice()); r.mine = r.L ? r.L.map(x => x.slice()) : r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
+      st.cands = M.findFixes(m.motif, { stretch: $('stretch').checked, keep: 3, lock: m.lock, extra: m.extra });
+      st.cands.forEach(r => { r.Y = r.F.map((x, i) => x.map((v, c) => (r.E ? r.E[i][c] : 0))); r.Y0 = r.Y.map(x => x.slice()); r.F0 = r.F.map(x => x.slice()); r.mine = r.L ? r.L.map(x => x.slice()) : r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); r.hist = []; });
       const box = $('cands'); box.innerHTML = '';
       if (!st.cands.length) { $('status').textContent = 'No workable fix found.'; return; }
       st.cands.forEach((r, k) => {
@@ -52,7 +61,15 @@
     }, 20);
   }
   const rowRGB = r => C.hexToRgb(C.hexAt(st.plan, r));
-  function chartOpts(r, extra) { return Object.assign({ cell: r.width > 60 ? 18 : 24, rowRGB }, extra); }
+  const extras = () => st.extraHex.map((hex, k) => ({ label: 'CD'[k], hex }));
+  const hasY = r => r.Y && r.Y.some(x => x.some(v => v));
+  const stitchRGB = r => (hasY(r) ? (i, c) => (r.Y[i][c] ? C.hexToRgb(st.extraHex[r.Y[i][c] - 1]) : null) : null);
+  /* color showing in square (i, c): the dc from the row above if there is one, else this row's stitch */
+  const visRGB = r => (i, c) => { const s = i + 1 < r.F.length && r.X[i + 1][c] ? i + 1 : i; return r.Y && r.Y[s][c] ? C.hexToRgb(st.extraHex[r.Y[s][c] - 1]) : rowRGB(s + 1); };
+  const carryTag = r => (hasY(r) ? row => [...new Set(r.Y[row - 1].filter(v => v))].sort().map(k => '+' + 'CD'[k - 1]).join('') : null);
+  const extraLegend = r => (hasY(r) ? [1, 2].filter(k => r.Y.some(x => x.includes(k))).map(k => ({ hex: st.extraHex[k - 1], rgb: C.hexToRgb(st.extraHex[k - 1]), text: `${st.extraHex[k - 1].toUpperCase()}  ·  ${'CD'[k - 1]} (carried strand, shaded squares)` })) : []);
+  const dirOpts = r => (hasY(r) ? { Y: r.Y, extras: extras() } : {});
+  function chartOpts(r, extra) { return Object.assign({ cell: r.width > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(r), carry: carryTag(r) }, extra); }
   function show(resetPlan) {
     const r = st.cands[st.sel]; $('outSec').classList.remove('hidden');
     if (resetPlan) { st.plan = C.defaultPlan(); st.selRow = null; $('colorNote').textContent = ''; }
@@ -60,9 +77,9 @@
     cv.onclick = e => { const g = cv._geo, sc = cv.height / cv.clientHeight, y = e.offsetY * sc, k = Math.floor((y - g.top) / g.cell), row = g.H - k;
       if (row < 1 || row > g.H) return; st.selRow = row; $('colorNote').textContent = `Row ${row} selected (${C.yarnOf(row)} yarn, now ${C.hexAt(st.plan, row)}). Tap a color.`; show(); };
     const fab = M.simulate(r.X), H = fab.length;
-    replace('fabCv', Rn.drawGrid(fab, { cell: Math.max(4, Math.min(16, Math.floor(500 / r.width))), cellRGB: (i, c) => rowRGB(i + 1 < H && r.X[i + 1][c] ? i + 2 : i + 1) }));
-    replace('prevCv', Rn.drawPreview(r.X, { rowRGB }));
-    drawSt(); drawBank(); $('written').textContent = window.MosaicWritten.directions(r.X, st.plan);
+    replace('fabCv', Rn.drawGrid(fab, { cell: Math.max(4, Math.min(16, Math.floor(500 / r.width))), cellRGB: visRGB(r) }));
+    replace('prevCv', Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r) }));
+    drawSt(); drawBank(); $('written').textContent = window.MosaicWritten.directions(r.X, st.plan, dirOpts(r));
     $('summary').textContent = `${r.width + 2} stitches (incl. BS) × ${r.rows} rows + chain. ${r.X.flat().reduce((a, b) => a + b, 0)} X's.`;
   }
   const dl = (id, name) => { const a = document.createElement('a'); a.download = name; a.href = $(id).toDataURL('image/png'); a.click(); };
@@ -70,10 +87,16 @@
   $('resample').onclick = () => { if (st.pixHist.length && !confirm('Re-reading the grid replaces your pixel edits. Continue?')) return; st.samp = st.det.sample(+$('nx').value, +$('ny').value); afterSample(); };
   function drawGridCheck() { $('gridBox').classList.remove('hidden'); const w = Math.min(600, $('gridBox').clientWidth || 600);
     replace('gridCv', Rn.drawGridCheck(st.img, st.samp.xs, st.samp.ys, w)); }
-  $('autoBtn').onclick = () => { st.map = M.autoSplit(st.samp.idx, st.samp.palette, st.bg); drawPalette(); };
-  $('thrBtn').onclick = () => { st.map = M.thresholdMap(st.samp.palette); st.map[st.bg] = 0; drawPalette(); };
+  $('autoBtn').onclick = () => { st.map = M.autoSplit(st.samp.idx, st.samp.palette, st.bg); st.extra = st.samp.palette.map(() => 0); drawPalette(); };
+  $('thrBtn').onclick = () => { st.map = M.thresholdMap(st.samp.palette); st.map[st.bg] = 0; st.extra = st.samp.palette.map(() => 0); drawPalette(); };
+  /* Up to four colors: A = background, then B, C, D by how many squares use them; any other color joins the closest of those four. */
+  $('auto4Btn').onclick = () => { const s = st.samp, d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const order = s.palette.map((c, i) => i).filter(i => i !== st.bg).sort((a, b) => s.counts[b] - s.counts[a]);
+    const lead = [st.bg].concat(order.filter(i => s.counts[i] > 0).slice(0, 3)), roles = ['A', 'B', 'C', 'D'];
+    s.palette.forEach((c, i) => { let k = lead.indexOf(i); if (k < 0) k = lead.reduce((b, j, q) => (d(c, s.palette[j]) < d(c, s.palette[lead[b]]) ? q : b), 0); setRole(i, roles[k]); });
+    drawPalette(); $('palNote').textContent = lead.length < 3 ? 'Only two colors here, so there is nothing for C or D.' : `Split into ${lead.length} colors. Tap a swatch to change its letter.`; };
   document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.scale = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); if (st.samp) drawPalette(); });
-  $('go').onclick = convert; $('dlChart').onclick = () => { const r = st.cands[st.sel], cv = Rn.drawChart(r.F, r.X, chartOpts(r, { legend: C.legend(st.plan, r.F.length) }));
+  $('go').onclick = convert; $('dlChart').onclick = () => { const r = st.cands[st.sel], cv = Rn.drawChart(r.F, r.X, chartOpts(r, { legend: C.legend(st.plan, r.F.length).concat(extraLegend(r)) }));
     const a = document.createElement('a'); a.download = 'mosaic_chart.png'; a.href = cv.toDataURL('image/png'); a.click(); };
   function pick(hex) {
     if (st.selRow == null) { $('colorNote').textContent = 'Tap a row in the color strip at the left of the chart first.'; return; }
@@ -104,8 +127,8 @@
   $('pdfForm').onsubmit = async ev => { ev.preventDefault(); const title = $('pdfTitle').value.trim(); if (!title) { $('pdfNote').textContent = 'Please type a title.'; return; }
     $('pdfNote').textContent = 'Making PDF…';
     try { const r = st.cands[st.sel], names = {}; document.querySelectorAll('#pdfColors input').forEach(i => names[i.dataset.key] = i.value);
-      const pv = Rn.drawPreview(r.X, { rowRGB, noLabel: true });
-      const doc = window.MosaicPDF.build({ X: r.X, F: r.F, plan: st.plan, title, names, notes: $('pdfNotes').value, ideas: $('pdfIdeas').value, project: $('pdfProject').value, border: $('pdfBorder').value,
+      const pv = Rn.drawPreview(r.X, { rowRGB, stitchRGB: stitchRGB(r), noLabel: true });
+      const doc = window.MosaicPDF.build({ X: r.X, F: r.F, plan: st.plan, ...dirOpts(r), title, names, notes: $('pdfNotes').value, ideas: $('pdfIdeas').value, project: $('pdfProject').value, border: $('pdfBorder').value,
         logo: await getLogo(), preview: pv.toDataURL('image/png'), previewW: pv.width, previewH: pv.height });
       doc.save(window.MosaicPDF.fileName(title)); $('pdfDlg').close(); }
     catch (e) { console.error(e); $('pdfNote').textContent = 'Something went wrong: ' + e.message; } };
@@ -134,8 +157,8 @@
         else { const v = st.tool === 'keep' ? 1 : 0; if (st.keep[r][c] === v) return; st.keep[r][c] = v; fillCell(cv, r, c, s.palette[s.idx[r][c]]); if (v) Rn.markCells(cv, st.keep.map((x, i) => x.map((y, j) => (i === r && j === c ? 1 : 0))), 'keep'); } },
       pixChanged);
     $('pixUndo').disabled = $('pixReset').disabled = !st.pixHist.length; }
-  const pixSnap = () => { const s = st.samp; return { idx: s.idx.map(r => r.slice()), keep: st.keep.map(r => r.slice()), palette: s.palette.map(c => c.slice()), counts: s.counts.slice(), map: st.map.slice(), bg: st.bg, paint: st.paint }; };
-  function pixRestore(h) { const s = st.samp; s.ny = h.idx.length; s.nx = h.idx[0].length; s.idx = h.idx; s.palette = h.palette; s.counts = h.counts; st.keep = h.keep; st.map = h.map; st.bg = h.bg; st.paint = h.paint; }
+  const pixSnap = () => { const s = st.samp; return { idx: s.idx.map(r => r.slice()), keep: st.keep.map(r => r.slice()), palette: s.palette.map(c => c.slice()), counts: s.counts.slice(), map: st.map.slice(), extra: st.extra.slice(), bg: st.bg, paint: st.paint }; };
+  function pixRestore(h) { const s = st.samp; s.ny = h.idx.length; s.nx = h.idx[0].length; s.idx = h.idx; s.palette = h.palette; s.counts = h.counts; st.keep = h.keep; st.map = h.map; st.extra = h.extra; st.bg = h.bg; st.paint = h.paint; }
   function pixChanged() {
     const s = st.samp, h = st.pixHist[st.pixHist.length - 1];
     if (h && JSON.stringify([h.idx, h.keep, h.palette]) === JSON.stringify([s.idx, st.keep, s.palette])) st.pixHist.pop();   // tap that changed nothing
@@ -147,15 +170,19 @@
     // The chart uses the pixel graph exactly as shown, empty edges included (Trim empty edges removes them).
     const G = mono(), y0 = 0, y1 = G.length - 1, x0 = 0, x1 = G[0].length - 1;
     const cut = A => A.slice(y0, y1 + 1).map(r => r.slice(x0, x1 + 1)), sc = A => (st.scale > 1 ? M.scale(A, st.scale) : A);
-    const lock = sc(cut(st.keep));
-    return { motif: sc(cut(G)), lock: lock.some(r => r.some(v => v)) ? lock : null, y0, x0 };
+    const lock = sc(cut(st.keep)), extra = sc(cut(extraMask()));
+    return { motif: sc(cut(G)), lock: lock.some(r => r.some(v => v)) ? lock : null, extra: extra.some(r => r.some(v => v)) ? extra : null, y0, x0 };
   }
   /* Squares that can't be crocheted exactly as drawn (same rules as the converter), mapped back onto the picture. */
   function findTrouble() {
-    const { motif, y0, x0 } = motifAndLock(), h = motif.length, s = st.scale, ones = new Array(h).fill(1);
-    if (!motif.some(r => r.some(v => v))) { st.trouble = null; $('troubleNote').textContent = ''; return; }
+    const { motif, extra, y0, x0 } = motifAndLock(), h = motif.length, s = st.scale, ones = new Array(h).fill(1);
+    if (!motif.some(r => r.some(v => v)) && !extra) { st.trouble = null; $('troubleNote').textContent = ''; return; }
     let best = null;
-    for (const b of [0, 1]) { const pc = M.problemCells(M.stretchRows(motif, ones, b)); if (!best || pc.n < best.pc.n) best = { b, pc }; }
+    for (const b of [0, 1]) { const T = M.stretchRows(motif, ones, b), E = extra ? M.stretchRows(extra, ones, b) : null;
+      if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v) T[i][c] = M.color(i + 1); }));   // C / D squares sit in their own row
+      const pc = M.problemCells(T);
+      if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v && i > 0 && !E[i - 1][c] && T[i - 1][c] !== M.color(i) && !pc.bad[i - 1][c]) { pc.bad[i - 1][c] = 1; pc.n++; pc.spots++; } }));   // needs a dc under a C / D square
+      if (!best || pc.n < best.pc.n) best = { b, pc }; }
     const mark = st.samp.idx.map(r => r.map(() => 0)); let n = 0;
     best.pc.bad.forEach((row, i) => row.forEach((v, c) => { const k = h - 1 - (i - best.b), mc = c - 1;
       if (!v || k < 0 || k >= h || mc < 0 || mc >= motif[0].length) return; const y = y0 + Math.floor(k / s), x = x0 + Math.floor(mc / s); if (!mark[y][x]) { mark[y][x] = 1; n++; } }));
@@ -171,7 +198,7 @@
     remapMerge(keepI, i); st.mergeFrom = null; pixChanged();
     $('palNote').textContent = `Merged ${n} square${n === 1 ? '' : 's'}. Tap two more colors to merge again, or tap Merge two colors to stop.`; }
   function remapMerge(keepI, dropI) { const s = st.samp, fix = v => { v = v === dropI ? keepI : v; return v > dropI ? v - 1 : v; };
-    s.idx = s.idx.map(r => r.map(fix)); s.palette.splice(dropI, 1); st.map.splice(dropI, 1); st.bg = fix(st.bg); st.paint = fix(st.paint); }
+    s.idx = s.idx.map(r => r.map(fix)); s.palette.splice(dropI, 1); st.map.splice(dropI, 1); st.extra.splice(dropI, 1); st.bg = fix(st.bg); st.paint = fix(st.paint); }
   $('mergePick').onclick = () => { st.mergeMode = !st.mergeMode; st.mergeFrom = null; $('mergePick').classList.toggle('on', st.mergeMode);
     $('palNote').textContent = st.mergeMode ? 'Tap the color to keep, then the color to merge into it.' : ''; drawPalette(); };
   $('mergeAuto').onclick = () => { const s = st.samp, d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), before = s.palette.length; let snapped = false;
@@ -194,7 +221,7 @@
   $('pixUndo').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist.pop()); pixChanged(); };
   $('pixReset').onclick = () => { if (!st.pixHist.length) return; pixRestore(st.pixHist[0]); st.pixHist = []; pixChanged(); $('pixNote').textContent = 'Pixel edits, keeps and merges undone.'; };
   // Add / remove empty rows and columns, center, trim
-  const emptyRow = r => r.every(v => !st.map[v]);
+  const emptyRow = r => r.every(v => !st.map[v] && !st.extra[v]);
   function resize(fn, note) { const s = st.samp; st.pixHist.push(pixSnap()); const res = fn(s.idx, st.keep);
     if (!res) { st.pixHist.pop(); return; } s.idx = res.idx; st.keep = res.keep; s.ny = s.idx.length; s.nx = s.idx[0].length;
     pixChanged(); $('sizeNote').textContent = (typeof note === 'function' ? note(res) : note) + ` Now ${s.nx} × ${s.ny}.`; }
@@ -228,13 +255,21 @@
 
   // After converting: edit the finished look; X's are recalculated from it
   const cur = () => st.cands[st.sel];
-  const snap = r => ({ F: r.F.map(x => x.slice()), mine: r.mine.map(x => x.slice()), auto: r.auto.map(x => x.slice()) });
+  const snap = r => ({ F: r.F.map(x => x.slice()), mine: r.mine.map(x => x.slice()), auto: r.auto.map(x => x.slice()), Y: r.Y.map(x => x.slice()) });
   const stRGB = r => (i, c, v) => rowRGB(v === M.color(i + 1) ? i + 1 : i + 2);
   function drawSt() {
     const r = cur(), H = r.F.length, pr = M.problemCells(r.F), get = stRGB(r);
-    const cv = Rn.drawEdit(r.F, { cell: Math.max(6, Math.min(22, Math.floor(560 / Math.max(r.width, H)))), cellRGB: get, bad: pr.bad, mine: r.mine, auto: r.auto });
+    const vis = visRGB(r), cv = Rn.drawEdit(r.F, { cell: Math.max(6, Math.min(22, Math.floor(560 / Math.max(r.width, H)))), cellRGB: (i, c) => vis(i, c), bad: pr.bad, mine: r.mine, auto: r.auto });
     replace('stCv', cv); applyZoom(cv, st.stZoom);
-    if (st.stEdit) { let val = null;
+    if (st.stEdit && st.stTool !== 'ab') { const want = st.stTool; let hitDc = false;   // paint stitches with C / D (or back to the row's yarn)
+      paintable(cv, () => r.hist.push(snap(r)),
+        (k, c) => { const i = H - 1 - k, s = i + 1 < H && r.X[i + 1][c] ? i + 1 : i; if (r.Y[s][c] === want) return; r.Y[s][c] = want;
+          const rows = r.X[s][c] ? [s, s - 1] : [s]; if (r.X[s][c]) hitDc = true;
+          rows.forEach(q => { if (q >= 0) fillCell(cv, H - 1 - q, c, vis(q, c)); }); },
+        () => { const h = r.hist[r.hist.length - 1]; if (h && JSON.stringify(h.Y) === JSON.stringify(r.Y)) r.hist.pop();
+          stChanged(hitDc ? `Part of what you painted is a dc, so <b>both squares it shows in</b> changed: the dc and the square it covers below. That keeps every switch a real stitch.` : null); });
+    }
+    if (st.stEdit && st.stTool === 'ab') { let val = null;
       paintable(cv, () => { r.hist.push(snap(r)); val = null; },
         (k, c, first) => { const i = H - 1 - k; if (first) val = 1 - r.F[i][c]; if (r.F[i][c] === val) return;
           r.F[i][c] = val; r.mine[i][c] = 1; r.auto[i][c] = 0; fillCell(cv, k, c, get(i, c, val)); },
@@ -243,18 +278,22 @@
     $('stUndo').disabled = !r.hist.length; $('stReset').disabled = !r.hist.length; $('stFix').disabled = !pr.n;
     if (!$('stNote').dataset.keep) $('stNote').innerHTML = pr.n
       ? `<b class="warn">✘ ${pr.n} red square${pr.n > 1 ? 's' : ''} can't be worked.</b> In each column, a square that shows the other row's color can't sit right above another one, or in the top row. Tap “Fix around my edits” to adjust the stitches next to them, or keep editing.`
-      : (edits ? `<b class="ok">✔ Workable.</b> ${edits} square${edits > 1 ? 's' : ''} edited by hand.` : (st.stEdit ? 'Tap or drag on a square to switch it between A and B.' : ''));
+      : (edits ? `<b class="ok">✔ Workable.</b> ${edits} square${edits > 1 ? 's' : ''} edited by hand.` : (st.stEdit ? (st.stTool === 'ab' ? 'Tap or drag on a square to switch it between A and B.'
+        : st.stTool ? `Tap or drag to work stitches in ${'CD'[st.stTool - 1]}. A dc shows in two squares (its own and the one it covers), so both change together.` : 'Tap or drag over C / D squares to work them in the row\'s own yarn again.') : ''));
     delete $('stNote').dataset.keep;
   }
   function stChanged(note) { const r = cur(); r.X = M.check(r.F).X; if (note) { $('stNote').innerHTML = note; $('stNote').dataset.keep = 1; } show(); }
   $('stEdit').onclick = () => { st.stEdit = !st.stEdit; $('stEdit').classList.toggle('on', st.stEdit); drawSt(); };
   $('stUndo').onclick = () => { const r = cur(), h = r.hist.pop(); if (!h) return; Object.assign(r, h); stChanged(); };
-  $('stReset').onclick = () => { const r = cur(); if (!r.hist.length) return; r.hist.push(snap(r)); r.F = r.F0.map(x => x.slice());
+  $('stReset').onclick = () => { const r = cur(); if (!r.hist.length) return; r.hist.push(snap(r)); r.F = r.F0.map(x => x.slice()); r.Y = r.Y0.map(x => x.slice());
     r.mine = r.F.map(x => x.map(() => 0)); r.auto = r.F.map(x => x.map(() => 0)); stChanged('Back to the original chart. Tap Undo to bring your edits back.'); };
   $('stFix').onclick = () => { const r = cur(), res = M.refix(r.F, r.mine); if (!res) return;
     r.hist.push(snap(r)); r.auto = r.F.map((row, i) => row.map((v, c) => (v !== res.F[i][c] ? 1 : r.auto[i][c]))); res.F.forEach((row, i) => row.forEach((v, c) => { if (v !== r.F[i][c]) r.mine[i][c] = 0; }));
     r.F = res.F;
     stChanged(`<b class="ok">✔ Workable.</b> Adjusted ${res.changed} square${res.changed === 1 ? '' : 's'} (outlined orange)` + (res.lockedChanged ? `, including ${res.lockedChanged} of your own edits that couldn't be worked as drawn.` : '; all your edits were kept.') + ' Tap Undo if you don\'t like it.'); };
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { const v = b.dataset.st; st.stTool = v === 'ab' ? 'ab' : +v;
+    document.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === b)); if (!st.stEdit) $('stEdit').click(); else drawSt(); });
+  ['hexC', 'hexD'].forEach((id, k) => { $(id).oninput = () => { st.extraHex[k] = $(id).value; st.hexTouched[k] = true; if (st.cands.length) show(); drawPalette(); }; });
   $('stIn').onclick = () => zoom('stZoom', 1, drawSt); $('stOut').onclick = () => zoom('stZoom', -1, drawSt);
 
   window._mosaicState = st;

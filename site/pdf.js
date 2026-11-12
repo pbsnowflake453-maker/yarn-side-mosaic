@@ -23,7 +23,7 @@
   function greedy(H, per) { const out = []; let r0 = 1; while (true) { const r1 = Math.min(H, r0 + per - 1); out.push([r0, r1]); if (r1 >= H) break; r0 = r1 - 1; } return out; }
 
   function build(o) {
-    const { X, plan } = o, H = X.length, Wd = X[0].length, n = Wd + 2;
+    const { X, plan } = o, EX = o.Y && o.Y.some(row => row.some(v => v)) ? { Y: o.Y, extras: o.extras } : {}, H = X.length, Wd = X[0].length, n = Wd + 2;
     const title = clean(o.title).trim(), names = o.names || {}, Y = yarns(plan, H);
     const nm = e => { const v = clean(names[e.key] || '').trim(); return v ? `${e.label} - ${v}` : e.label; };
     const doc = new root.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
@@ -108,7 +108,7 @@
     const SHOW = Math.min(16, n), shown = runs.filter(r => r.i0 < SHOW), exY = yarnFor(Y, ex);
     const desc = r => r.t === 'B' ? 'BS' : `${r.t === 'd' ? 'dc' : 'sc'} ${r.n}`;
     const tipRuns = shown.filter(r => r.i0 + r.n <= SHOW).slice(1, 3);
-    const lineFull = Wr().directions(X, plan).split('\n').find(l => l.startsWith(`Row ${ex} (`)), exBody = lineFull.replace(/^Row \d+ \([^)]*\):\s*/, '');
+    const lineFull = Wr().directions(X, plan, EX).split('\n').find(l => l.startsWith(`Row ${ex} (`)), exBody = lineFull.replace(/^Row \d+ \([^)]*\):\s*/, '');
     const shortBody = exBody.split(', ').slice(0, 4).join(', ') + (exBody.split(', ').length > 4 ? ', ...' : '');
     const rangeTxt = ranges.map(([a, b]) => `${a}-${b}`), joinList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
     const splitTxt = ranges.length === 1 ? `The whole chart fits on one page (rows 1-${H}).` : `The chart is split over ${ranges.length} pages: rows ${joinList(rangeTxt)}. The first two rows on each page after the first repeat the top of the previous page, below a teal line, so you can find your place. Work each row once.`;
@@ -132,14 +132,16 @@
       y = yy - 62; }
     para(`Written: Row ${ex} (${nm(exY)}): ${shortBody} The X squares are the dc stitches; the plain squares are the sc stitches.`, 54, 10.5, false);
     y -= 6; sec('Chart key'); Y.forEach(e => swatch(e.hex, yarnLine(e)));
+    if (EX.Y) EX.extras.forEach((e, k) => { if (EX.Y.some(row => row.includes(k + 1))) swatch(e.hex, `Color ${e.label} (carried strand): squares shaded this color are worked with ${e.label}. The written rows show them as [${e.label}: …].`); });
     swatch(Y[0].hex, 'X = dc in front 2 rows down', 'X'); swatch(Y[0].hex, 'BS = border stitch', 'BS');
     y -= 8; sec('Abbreviations (US terms)');
     [['ch', 'chain'], ['sc', 'single crochet (back loop only, see notes)'], ['dc', 'double crochet (front loop, 2 rows below, see notes)'], ['BS', 'border stitch (sc through both loops)'], ['st(s)', 'stitch(es)'], ['RS', 'right side']]
       .forEach(([a, b]) => { ensure(14); font('bold', 10.5 * K); ink(DARK); text(a, 64, y); font('normal', 10.5 * K); text(b, 110, y); y -= 14 * K; }); footer(); });
 
     // ---------- 4. Written instructions ----------
-    const dirs = Wr().directions(X, plan).split('\n').filter(l => /^Row \d+ \(/.test(l)).map(l => { const m = l.match(/^Row (\d+) \(([^)]*)\):\s*(.*)$/), r = +m[1];
-      const e = yarnFor(Y, Math.max(1, r)), chg = /change to new color/.test(m[2]); return { r, e, lab: `Row ${r} (${nm(e)}):`, body: (chg ? `Change to ${nm(e)}. ` : '') + m[3] }; });
+    const dirs = Wr().directions(X, plan, EX).split('\n').filter(l => /^Row \d+ \(/.test(l)).map(l => { const m = l.match(/^Row (\d+) \(([^)]*)\):\s*(.*)$/), r = +m[1];
+      const e = yarnFor(Y, Math.max(1, r)), chg = /change to new color/.test(m[2]), cr = (m[2].match(/carry ([A-Z](?: and [A-Z])*)/) || [])[1];
+      return { r, e, lab: `Row ${r} (${nm(e)}):`, body: (chg ? `Change to ${nm(e)}. ` : '') + (cr ? `Carry ${cr}. ` : '') + m[3] }; });
     const labW = Math.min(230, Math.max(...dirs.map(d => width(d.lab, 'bold', 10))) + 16), bx = 68 + labW;
     newPage(); curHead = 'Written Instructions'; header(curHead); y = PH - 108;
     for (const d of dirs) { const ls = wrap(d.body, 'normal', 10, PW - 54 - bx), need = ls.length * 13 + 5;
@@ -154,9 +156,10 @@
       const gw = n * cs, x0 = (LW - gw) / 2, ybot = gridTop - (r1 - r0 + 1) * cs, fs = Math.max(3.2, Math.min(7.5, cs * 0.62));
       ink(GREY); font('normal', 8.5); text(`Part ${pi + 1} of ${ranges.length}. Work bottom up, every row RIGHT to LEFT.` + (pi ? ` Rows ${r0}-${r0 + 1} repeat the top of the previous page (below the teal line).` : ''), 54, LH - 96);
       for (let r = r0; r <= r1; r++) { const yy = ybot + (r - r0) * cs, e = yarnFor(Y, r), ik = lum(rgbOf(e.hex)) < 140 ? '#ffffff' : '#1a1a1a';
-        fill(e.hex); stroke('#555555'); doc.setLineWidth(.3);
-        for (let k = 0; k < n; k++) rect(x0 + k * cs, yy, cs, cs, true, true);
-        for (let k = 0; k < n; k++) { const xx = x0 + k * cs;
+        stroke('#555555'); doc.setLineWidth(.3);
+        const cellHex = k => (EX.Y && k > 0 && k < n - 1 && EX.Y[r - 1][k - 1] ? EX.extras[EX.Y[r - 1][k - 1] - 1].hex : e.hex);
+        for (let k = 0; k < n; k++) { fill(cellHex(k)); rect(x0 + k * cs, yy, cs, cs, true, true); }
+        for (let k = 0; k < n; k++) { const xx = x0 + k * cs, ik = lum(rgbOf(cellHex(k))) < 140 ? '#ffffff' : '#1a1a1a';
           if (k === 0 || k === n - 1) { if (cs >= 6) { ink(ik); font('bold', Math.min(5, cs * 0.42)); text('BS', xx + cs / 2, yy + cs / 2 - cs * 0.15, { align: 'center' }); } else { fill(ik); rect(xx + cs * .35, yy + cs * .35, cs * .3, cs * .3, true); } }
           else if (X[r - 1][k - 1]) { stroke(ik); doc.setLineWidth(Math.max(.5, cs / 11)); const p = cs * 0.2; line(xx + p, yy + p, xx + cs - p, yy + cs - p); line(xx + p, yy + cs - p, xx + cs - p, yy + p); } }
         ink(DARK); font('normal', fs); text(String(r), x0 - 14, yy + cs * .3, { align: 'right' }); text(String(r), x0 + gw + 14, yy + cs * .3);
@@ -164,7 +167,7 @@
         if (pi && r === r0 + 1) { stroke(TEAL); doc.setLineWidth(1.5); line(x0 - 30, yy + cs, x0 + gw + 30, yy + cs); } }
       const top = ybot + (r1 - r0 + 1) * cs, nf = Math.max(2.8, Math.min(6.5, cs * 0.55)); ink(DARK); font('normal', nf);
       for (let k = 0; k < n; k++) { const s = String(n - k), xx = x0 + k * cs + cs / 2; if (cs < 6 && (n - k) % 5 && n - k !== 1 && n - k !== n) continue; text(s, xx, top + 3, { align: 'center' }); text(s, xx, ybot - nf - 2, { align: 'center' }); }
-      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']]);
+      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? EX.extras.filter((e, k) => EX.Y.some(row => row.includes(k + 1))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']]);
       let kx = 54, ky = ybot - 30; font('normal', 8);
       items.forEach(([hx, m, t]) => { const tw = width(t, 'normal', 8) + 30; if (kx + tw > LW - 54) { kx = 54; ky -= 16; }
         fill(hx); stroke(DARK); doc.setLineWidth(.4); rect(kx, ky - 3, 10, 10, true, true); const ik = lum(rgbOf(hx)) < 140 ? '#ffffff' : '#1a1a1a';

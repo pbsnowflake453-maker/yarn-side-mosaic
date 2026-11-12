@@ -20,6 +20,16 @@
   }
   const fmtRun = r => `${NAME[r.t]} ${r.n}`;
   const fmt = items => items.map(it => it.rep ? `(${it.rep.map(fmtRun).join(', ')}) x${it.k}` : fmtRun(it)).join(', ');
+  /* Row body with extra strands: Y[r-1][c] = 0 (row's own yarn) or k (extras[k-1], e.g. C). Stitches in an extra strand
+     are grouped as [C: …]; everything else uses the row's yarn. Read right to left like the row itself. */
+  function rowBody(X, r, Y, extras) {
+    const s = rowString(X, r); if (!Y) return fmt(compress(s));
+    const yr = Y[r - 1], W = yr.length, parts = []; let i = 0;
+    while (i < s.length) { const k = yr[W - 1 - i]; let j = i; while (j < s.length && yr[W - 1 - j] === k) j++;
+      const body = fmt(compress(s.slice(i, j))); parts.push(k ? `[${extras[k - 1].label}: ${body}]` : body); i = j; }
+    return parts.join(', ');
+  }
+  const carried = (Y, r) => Y ? [...new Set(Y[r - 1].filter(v => v))].sort() : [];
   function rowString(X, r) { const row = X[r - 1]; let s = ''; for (let c = row.length - 1; c >= 0; c--) s += row[c] ? 'd' : 's'; return s; } // right to left
   function colorNames(plan) { const m = {}; for (const y of ['A', 'B']) plan[y].forEach((e, i) => { m[y + e.row] = { label: plan[y].length > 1 ? `${y}${i + 1}` : y, hex: e.hex }; }); return m; }
   function colorFor(plan, r) { const y = r % 2 ? 'A' : 'B', list = plan[y]; let idx = 0; list.forEach((e, i) => { if (e.row <= r) idx = i; }); return { label: list.length > 1 ? `${y}${idx + 1}` : y, hex: list[idx].hex, change: idx > 0 && list[idx].row === r }; }
@@ -32,21 +42,24 @@
       '- sc = single crochet in back loop only.',
       '- dc = double crochet in front loop of the stitch two rows below, worked in front of the previous row (these are the X\'s on the chart).',
       '- (…) xN = repeat what is inside the parentheses N times.',
+      ...(opts.Y && opts.Y.some(row => row.some(v => v)) ? ['- [C: …] = work these stitches with yarn C instead of the row\'s yarn: sc still goes in the back loop, dc still goes in the front loop two rows below. "Carry C" means hold C along the top of the row with the row\'s yarn and crochet over it, switching strands when the row says so.'] : []),
       `- Size: ${n} stitches (including BS) x ${H} rows plus chain.`, '', 'YARN');
     for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const lbl = plan[y].length > 1 ? `${y}${i + 1}` : y; L.push(`- Color ${lbl}: ${e.hex} (from row ${e.row})`); });
+    (opts.extras || []).forEach((e, k) => { if (opts.Y && opts.Y.some(row => row.includes(k + 1))) L.push(`- Color ${e.label}: ${e.hex} (carried strand)`); });
     L.push('', 'DIRECTIONS', `Row 0 (Color ${colorFor(plan, 1).label}): Ch ${n}.`);
-    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r), body = fmt(compress(rowString(X, r)));
-      L.push(`Row ${r} (Color ${c.label}${c.change ? ', change to new color' : ''}): BS, ${body}, BS. (${n} sts)`); }
+    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r), body = rowBody(X, r, opts.Y, opts.extras), cr = carried(opts.Y, r).map(k => opts.extras[k - 1].label);
+      L.push(`Row ${r} (Color ${c.label}${c.change ? ', change to new color' : ''}${cr.length ? ', carry ' + cr.join(' and ') : ''}): BS, ${body}, BS. (${n} sts)`); }
     return L.join('\n');
   }
   // Parse "Row r (...): BS, ..., BS. (n sts)" back into a right-to-left 's'/'d' string (without BS)
   function parseRow(line) {
     const m = line.match(/^Row (\d+) \([^)]*\): BS, (.*), BS\. \((\d+) sts\)$/); if (!m) return null;
-    let body = m[2], out = '';
-    const re = /\(([^)]*)\) x(\d+)|(sc|dc) (\d+)/g; let t;
+    let body = m[2], out = '', yarn = '', cur = '-';
+    const re = /\[([A-Z]): |\]|\(([^)]*)\) x(\d+)|(sc|dc) (\d+)/g; let t;
     const one = s => s.split(', ').map(p => { const [a, b] = p.split(' '); return (a === 'dc' ? 'd' : 's').repeat(+b); }).join('');
-    while ((t = re.exec(body))) out += t[1] !== undefined ? one(t[1]).repeat(+t[2]) : one(`${t[3]} ${t[4]}`);
-    return { row: +m[1], s: out, count: +m[3] };
+    while ((t = re.exec(body))) { if (t[1]) { cur = t[1]; continue; } if (t[0] === ']') { cur = '-'; continue; }
+      const add = t[2] !== undefined ? one(t[2]).repeat(+t[3]) : one(`${t[4]} ${t[5]}`); out += add; yarn += cur.repeat(add.length); }
+    return { row: +m[1], s: out, count: +m[3], yarn };
   }
   root.MosaicWritten = { compress, fmt, directions, parseRow, rowString };
   if (typeof module !== 'undefined') module.exports = root.MosaicWritten;

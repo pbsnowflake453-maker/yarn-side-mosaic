@@ -63,15 +63,16 @@
       const x = L + n * cell; g.fillText(ab, x + Lr * 0.25, y + cell / 2); g.font = small; g.textAlign = 'left'; g.fillText(String(r), x + Lr * 0.55, y + cell / 2);
     };
     for (let i = 0; i < H; i++) {
-      const r = i + 1, y = top + (H - 1 - i) * cell, rc = color(r), fill = rowRGB(r), ink = inkFor(fill);
+      const r = i + 1, y = top + (H - 1 - i) * cell, rc = color(r), rowFill = rowRGB(r);
       for (let k = 0; k < n; k++) {
+        const fill = opts.stitchRGB && k > 0 && k < n - 1 ? opts.stitchRGB(i, k - 1) || rowFill : rowFill, ink = inkFor(fill);
         const x = L + k * cell; g.fillStyle = css(fill); g.fillRect(x, y, cell, cell);
         g.strokeStyle = '#999'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, cell, cell);
         if (k === 0 || k === n - 1) { g.fillStyle = ink; g.font = small; g.textAlign = 'center'; g.fillText('BS', x + cell / 2, y + cell / 2); }
         else if (X[i][k - 1]) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
           g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + cell - p, y + cell - p); g.moveTo(x + cell - p, y + p); g.lineTo(x + p, y + cell - p); g.stroke(); }
       }
-      label(r, y, rc ? 'B' : 'A');
+      label(r, y, (rc ? 'B' : 'A') + (opts.carry ? opts.carry(r) : ''));
     }
     const y0 = top + H * cell;
     for (let k = 0; k < n; k++) { const x = L + k * cell; g.strokeStyle = '#000'; g.lineWidth = Math.max(1.2, cell / 14);
@@ -80,10 +81,10 @@
     g.font = small; g.textAlign = 'center'; g.fillStyle = '#000';
     for (let k = 0; k < n; k++) { const num = String(n - k), x = L + k * cell + cell / 2; g.fillText(num, x, top - cell * 0.45); g.fillText(num, x, y0 + cell * 1.45); }
     g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05);
-    g.fillText('X = dc in front 2 rows down. BS = border stitch.', L, y0 + cell * 2.55);
+    g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : ''), L, y0 + cell * 2.55);
     if (legend.length) { let y = y0 + cell * 3.2; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
       for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(L, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(L + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
-        g.fillStyle = '#000'; g.fillText(`${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }
+        g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }
     return cv;
   }
 
@@ -104,13 +105,14 @@
       }
       g.strokeStyle = sh(c, .5); g.lineWidth = 1; g.beginPath(); g.moveTo(x + w / 2, y + 2); g.lineTo(x + w / 2, y + h - 2); g.stroke();
     };
+    const stitch = (i, col) => (opts.stitchRGB && col >= 0 && col < W && opts.stitchRGB(i, col)) || rowRGB(i + 1);
     for (let i = 0; i < H; i++) for (let k = 0; k < n; k++) { const col = k - 1, cov = col >= 0 && col < W && i + 1 < H && X[i + 1][col];
-      g.fillStyle = sh(rowRGB(cov ? i + 2 : i + 1), .55); g.fillRect(X0(k), Y0(i), cw, rh); }
+      g.fillStyle = sh(cov ? stitch(i + 1, col) : stitch(i, col), .55); g.fillRect(X0(k), Y0(i), cw, rh); }
     for (let k = 0; k < n; k++) loop(X0(k) + 2, pad + H * rh + 4, cw - 4, rh - 8, rowRGB(1));
     for (let i = 0; i < H; i++) {
       const c = rowRGB(i + 1);
-      for (let k = 0; k < n; k++) { const col = k - 1, x = X0(k), y = Y0(i);
-        if (col >= 0 && col < W && X[i][col]) loop(x + .5, y, cw - 1, rh * 2, c); else loop(x + .5, y + .5, cw - 1, rh - 1, c); }
+      for (let k = 0; k < n; k++) { const col = k - 1, x = X0(k), y = Y0(i), sc = stitch(i, col);
+        if (col >= 0 && col < W && X[i][col]) loop(x + .5, y, cw - 1, rh * 2, sc); else loop(x + .5, y + .5, cw - 1, rh - 1, sc); }
       g.strokeStyle = sh(c, .45); g.lineWidth = 1; g.beginPath(); g.moveTo(X0(0), Y0(i) + rh - 1); g.lineTo(X0(n), Y0(i) + rh - 1); g.stroke();
     }
     const grd = g.createRadialGradient(cv.width * .4, cv.height * .35, 10, cv.width * .5, cv.height * .5, Math.max(cv.width, cv.height) * .75);
