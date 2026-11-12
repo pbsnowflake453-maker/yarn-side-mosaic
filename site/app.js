@@ -21,6 +21,10 @@
     $('palSec').classList.toggle('hidden', s.palette.length <= 2); $('convSec').classList.remove('hidden'); drawPalette();
   }
   function mono() { return st.samp.idx.map(r => r.map(v => (st.extra[v] ? 0 : st.map[v]))); }
+  function roleRGB(L) { if (L === 'C' || L === 'D') return C.hexToRgb(st.extraHex['CD'.indexOf(L)]);
+    const s = st.samp; let best = -1; s.palette.forEach((c, i) => { if (roleOf(i) === L && (best < 0 || s.counts[i] > s.counts[best])) best = i; });
+    return best < 0 ? (L === 'A' ? [250, 250, 250] : [25, 25, 25]) : s.palette[best]; }
+  const usesExtra = () => st.extra.some((v, i) => v && st.samp.counts[i] > 0);
   const extraMask = () => st.samp.idx.map(r => r.map(v => st.extra[v] || 0));
   const toHex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
   const roleOf = i => (st.extra[i] ? ' CD'[st.extra[i]] : st.map[i] ? 'B' : 'A');
@@ -41,7 +45,7 @@
     $('extraNote').innerHTML = used.length ? `${used.join(' and ')} ${used.length > 1 ? 'are' : 'is a'} carried strand${used.length > 1 ? 's' : ''}: those squares become stitches worked in ${used.join(' / ')} on the A or B row they fall in. The converter keeps a dc from landing right under them, since that stitch can't be both.` : '';
     $('hexC').value = st.extraHex[0]; $('hexD').value = st.extraHex[1]; $('dotC').style.background = st.extraHex[0]; $('dotD').style.background = st.extraHex[1];
     drawPixPal(); const G = st.samp.idx.map(r => r.map(v => (st.extra[v] ? 1 + st.extra[v] : st.map[v]))),
-      mc = Rn.drawTopDown(G, [[250, 250, 250], [25, 25, 25]].concat(st.extraHex.map(C.hexToRgb)), Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length)))));
+      mc = Rn.drawTopDown(G, ['A', 'B', 'C', 'D'].map(roleRGB), Math.max(4, Math.min(16, Math.floor(400 / Math.max(G.length, G[0].length)))));
     findTrouble(); if (st.trouble) Rn.markCells(mc, st.trouble, 'bad'); replace('monoCv', mc); drawOrig();
   }
   function convert() {
@@ -56,7 +60,9 @@
       st.cands.forEach((r, k) => {
         const d = document.createElement('div'); d.className = 'cand' + (k === 0 ? ' sel' : ''); const cell = Math.max(2, Math.min(8, Math.floor(110 / r.width)));
         const hl = r.T.map((row, i) => row.map((v, c) => v !== r.F[i][c] ? 1 : 0)), im = document.createElement('div'); im.className = 'imgs';
-        im.append(Rn.drawGrid(r.T, { cell }), Rn.drawGrid(r.F, { cell, hl }), Rn.drawGrid(M.simulate(r.X), { cell }));
+        const a = roleRGB('A'), b = roleRGB('B'), ex = k => roleRGB(' CD'[k]), tc = (i, c, v) => (r.E && r.E[i][c] ? ex(r.E[i][c]) : v ? b : a);
+        const sim = (i, c) => { const s2 = i + 1 < r.F.length && r.X[i + 1][c] ? i + 1 : i; return r.E && r.E[s2][c] ? ex(r.E[s2][c]) : M.color(s2 + 1) ? b : a; };
+        im.append(Rn.drawGrid(r.T, { cell, cellRGB: tc }), Rn.drawGrid(r.F, { cell, hl, cellRGB: tc }), Rn.drawGrid(M.simulate(r.X), { cell, cellRGB: sim }));
         const black = r.T.flat().reduce((a, b) => a + b, 0);
         const p = document.createElement('p'); p.className = 'small';
         p.innerHTML = `<b>Option ${k + 1}${k === 0 ? ' (best)' : ''}</b> · ${r.width + 2} sts × ${r.rows} rows · ${r.stretched ? 'rows stretched' : 'no stretch'} · +${r.added} stitches (${Math.round(100 * r.added / black)}%)${r.removed ? `, −${r.removed}` : ''}${r.L ? (r.lockedChanged ? ` · <span class="warn">${r.lockedChanged} kept square${r.lockedChanged > 1 ? 's' : ''} changed</span>` : ' · kept squares unchanged') : ''} · ${r.simOK && r.valid ? '✔ simulation OK' : '✘ check failed'}`;
@@ -77,7 +83,9 @@
   function chartOpts(r, extra) { return Object.assign({ cell: r.width > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(r), carry: carryTag(r) }, extra); }
   function show(resetPlan) {
     const r = st.cands[st.sel]; $('outSec').classList.remove('hidden');
-    if (resetPlan) { st.plan = C.defaultPlan(); st.selRow = null; $('colorNote').textContent = ''; }
+    if (resetPlan) { st.plan = C.defaultPlan(); st.selRow = null; $('colorNote').textContent = '';
+      if (st.samp && usesExtra()) { st.plan.A[0].hex = toHex(roleRGB('A')); st.plan.B[0].hex = toHex(roleRGB('B'));
+        $('colorNote').textContent = 'Yarn colors A and B start as your picture\'s colors because this design uses C / D. Change them here.'; } }
     const cv = Rn.drawChart(r.F, r.X, chartOpts(r, { selRow: st.selRow })); replace('chartCv', cv);
     cv.onclick = e => { const g = cv._geo, sc = cv.height / cv.clientHeight, y = e.offsetY * sc, k = Math.floor((y - g.top) / g.cell), row = g.H - k;
       if (row < 1 || row > g.H) return; st.selRow = row; $('colorNote').textContent = `Row ${row} selected (${C.yarnOf(row)} yarn, now ${C.hexAt(st.plan, row)}). Tap a color.`; show(); };
