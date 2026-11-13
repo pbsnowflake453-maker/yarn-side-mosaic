@@ -34,10 +34,13 @@
   const fmt = items => items.map(it => it.rep ? `(${it.rep.map(fmtRun).join(', ')}) x${it.k}` : fmtRun(it)).join(', ');
   /* Row body with extra strands: Y[r-1][c] = 0 (row's own yarn) or k (extras[k-1], e.g. C). Stitches in an extra strand
      are grouped as [C: …]; everything else uses the row's yarn. Read right to left like the row itself. */
+  /* carried strands: extras is either [{label, hex}] (one color each) or { at(k, r) -> {label, hex}, list: [{k, label, hex, row}] } */
+  const strandAt = (extras, k, r) => (extras && typeof extras.at === 'function' ? extras.at(k, r) : extras[k - 1]);
+  const strandList = extras => (extras && extras.list ? extras.list : (extras || []).map((e, i) => ({ k: i + 1, label: e.label, hex: e.hex, row: 1 })));
   function rowBody(X, r, Y, extras, G) {
     const tk = rowTokens(X, r, G, Y), parts = []; let i = 0;
     while (i < tk.length) { const k = tk[i].y; let j = i; while (j < tk.length && tk[j].y === k) j++;
-      const body = fmt(compress(tk.slice(i, j).map(t => t.t).join(''))); parts.push(k ? `[${extras[k - 1].label}: ${body}]` : body); i = j; }
+      const body = fmt(compress(tk.slice(i, j).map(t => t.t).join(''))); parts.push(k ? `[${strandAt(extras, k, r).label}: ${body}]` : body); i = j; }
     return parts.join(', ');
   }
   const carried = (Y, r) => Y ? [...new Set(Y[r - 1].filter(v => v))].sort() : [];
@@ -57,9 +60,9 @@
       ...(opts.Y && opts.Y.some(row => row.some(v => v)) ? ['- [C: …] = work these stitches with yarn C instead of the row\'s yarn: sc still goes in the back loop, dc still goes in the front loop two rows below. "Carry C" means hold C along the top of the row with the row\'s yarn and crochet over it, switching strands when the row says so.'] : []),
       `- Size: ${n} stitches (including BS) x ${H} rows plus chain.`, '', 'YARN');
     for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const lbl = plan[y].length > 1 ? `${y}${i + 1}` : y; L.push(`- Color ${lbl}: ${e.hex} (from row ${e.row})`); });
-    (opts.extras || []).forEach((e, k) => { if (opts.Y && opts.Y.some(row => row.includes(k + 1))) L.push(`- Color ${e.label}: ${e.hex} (carried strand)`); });
+    strandList(opts.extras).forEach(e => { if (opts.Y && opts.Y.some(row => row.includes(e.k))) L.push(`- Color ${e.label}: ${e.hex} (carried strand${e.row > 1 ? `, from row ${e.row}` : ''})`); });
     L.push('', 'DIRECTIONS', `Row 0 (Color ${colorFor(plan, 1).label}): Ch ${n}.`);
-    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r), body = rowBody(X, r, opts.Y, opts.extras, opts.G), cr = carried(opts.Y, r).map(k => opts.extras[k - 1].label);
+    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r), body = rowBody(X, r, opts.Y, opts.extras, opts.G), cr = carried(opts.Y, r).map(k => strandAt(opts.extras, k, r).label);
       L.push(`Row ${r} (Color ${c.label}${c.change ? ', change to new color' : ''}${cr.length ? ', carry ' + cr.join(' and ') : ''}): BS, ${body}, BS. (${n} sts)`); }
     return L.join('\n');
   }
@@ -67,7 +70,7 @@
   function parseRow(line) {
     const m = line.match(/^Row (\d+) \([^)]*\): BS, (.*), BS\. \((\d+) sts\)$/); if (!m) return null;
     let body = m[2], out = '', yarn = '', cur = '-';
-    const re = /\[([A-Z]): |\]|\(([^)]*)\) x(\d+)|(sk 1 then 3 dc in next st then sk 1|sk 1 then 2 dc in next st|2 dc in next st then sk 1)|(sc|dc) (\d+)/g; let t;
+    const re = /\[([A-Z])\d*: |\]|\(([^)]*)\) x(\d+)|(sk 1 then 3 dc in next st then sk 1|sk 1 then 2 dc in next st|2 dc in next st then sk 1)|(sc|dc) (\d+)/g; let t;
     const tok = p => { for (const k in GROUP) if (GROUP[k] === p) return k; const [a, b] = p.split(' '); return (a === 'dc' ? 'd' : 's').repeat(+b); };
     const one = s => s.split(', ').map(tok).join('');
     while ((t = re.exec(body))) { if (t[1]) { cur = t[1]; continue; } if (t[0] === ']') { cur = '-'; continue; }
@@ -75,6 +78,6 @@
       out += add; yarn += [...add].map(ch => cur.repeat(WIDTH[ch])).join(''); }
     return { row: +m[1], s: out, count: +m[3], yarn, width: [...out].reduce((a, ch) => a + WIDTH[ch], 0) };
   }
-  root.MosaicWritten = { compress, fmt, directions, parseRow, rowString, rowTokens };
+  root.MosaicWritten = { compress, fmt, directions, parseRow, rowString, rowTokens, strandAt, strandList };
   if (typeof module !== 'undefined') module.exports = root.MosaicWritten;
 })(typeof window !== 'undefined' ? window : globalThis);

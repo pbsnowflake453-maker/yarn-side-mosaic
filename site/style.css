@@ -51,3 +51,11 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .dHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.dHead h2{margin:0}.dnote{min-height:2.6em}
 .sizeBox{margin:8px 0;background:#f6f1ea;border-radius:10px;padding:6px 10px}.sizeBox summary{cursor:pointer;font-weight:600}.sizeBox .row{gap:6px;margin:6px 0;align-items:center;flex-wrap:wrap}.sizeBox .lab{width:48px;font-weight:600}.sizeBox button{padding:7px 10px;font-size:.85rem}
 .optsBox{background:#f6f1ea;border-radius:10px;padding:8px 10px;margin:8px 0}.optsBox .cand button{margin-top:4px}#dCv{touch-action:none}
+.swatch.none{outline:2px dashed #b9b0a5;outline-offset:2px}.swatch.none .badge{background:#ece5da;color:#6b625a}
+.swWrap.picked .swatch{box-shadow:0 0 0 3px #125765}.swn{color:#6b625a;font-size:.72rem}
+.letters{gap:12px;margin:6px 0}.letterChip{display:inline-flex;align-items:center;gap:5px;background:#f6f1ea;border-radius:8px;padding:4px 8px;font-weight:700}
+.letterChip input{width:30px;height:24px;padding:0;border:1px solid #bbb;border-radius:5px;background:none}.letterChip .held{font-weight:400;display:inline-flex;align-items:center;gap:3px}
+.mini{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid #0003}.fixSet .lab{width:auto}
+#startDesign:disabled,#savePic:disabled{opacity:.45}
+.colorBox{display:flex;flex-direction:column;gap:8px;margin:8px 0}.colorBox .q{background:#fff6ea;border:1px solid #f0d6b0;border-radius:10px;padding:8px 10px}.colorBox .row{gap:6px;flex-wrap:wrap;margin-top:6px}.colorBox button{padding:6px 9px;font-size:.82rem;display:inline-flex;align-items:center;gap:5px}
+.remap{display:inline-flex;align-items:center;gap:3px;margin-right:10px}.remap button{padding:4px 8px;font-size:.78rem}.remap button.on{background:#125765;color:#fff}

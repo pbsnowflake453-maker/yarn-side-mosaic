@@ -272,6 +272,44 @@
     return { F: out, changed, lockedChanged };
   }
 
-  root.Mosaic = { fixDesign, groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
+  /* Fix with carried strands as well as A / B.
+     F = look (0 / 1), Y = strand per square (0, 1 = C, 2 = D: worked as an sc in that strand on its own row).
+     opts.lock = squares to keep if possible; opts.choices(i, c) = [{k, cost}] strand options for a plain square.
+     A strand square must show its own row and can't have a dc right under it. New strand squares never make a row
+     carry two different strands (rows that already do are left alone). */
+  function fixColors(F, Y, opts = {}) {
+    const H = F.length, W = F[0].length, lock = opts.lock, ban = [...Array(H)].map(() => new Set());
+    const rowHas = i => new Set(Y[i].filter(v => v));
+    for (let i = 0; i < H; i++) { const s = rowHas(i); if (s.size > 1) { ban[i].add(1); ban[i].add(2); } else if (s.size === 1) ban[i].add(s.has(1) ? 2 : 1); }
+    let out = null;
+    for (let round = 0; round < 6; round++) {
+      const nF = clone(F), nY = clone(Y); let ok = true;
+      for (let c = 0; c < W && ok; c++) {
+        let best = new Map([[false, { cost: 0, path: [] }]]);
+        for (let i = 0; i < H; i++) { const r = i + 1, own = color(r), nxt = new Map();
+          const put = (m, cost, step, st) => { const k = st.cost + cost; if (!nxt.has(m) || k < nxt.get(m).cost) nxt.set(m, { cost: k, path: st.path.concat([step]) }); };
+          for (const [pm, st] of best) {
+            if (Y[i][c]) { if (!pm) put(false, 0, [own, Y[i][c]], st); continue; }
+            for (const v of [F[i][c], 1 - F[i][c]]) { const m = v !== own; if (m && pm) continue; if (m && i === H - 1) continue; put(m, cellCost(F, i, c, v, null, lock), [v, 0], st); }
+            if (!pm && opts.choices) for (const ch of opts.choices(i, c)) if (!ban[i].has(ch.k)) put(false, ch.cost + (lock && lock[i][c] ? 40 : 0), [own, ch.k], st);
+          }
+          best = nxt; if (!best.size) break; }
+        if (!best.size) { ok = false; break; }
+        let pick = null; for (const v of best.values()) if (!pick || v.cost < pick.cost) pick = v;
+        pick.path.forEach(([v, y], i) => { nF[i][c] = v; nY[i][c] = y; });
+      }
+      if (!ok) return out;
+      out = { F: nF, Y: nY }; let again = false;
+      for (let i = 0; i < H; i++) { const s = rowHas.call(null, i), n = new Set(nY[i].filter(v => v)); if (n.size > 1 && !(s.size > 1)) {
+        const added = k => nY[i].filter((v, c) => v === k && !Y[i][c]).length;   // keep the strand the row already carries, else the one used more
+        const drop = s.size === 1 ? (s.has(1) ? 2 : 1) : (added(1) >= added(2) ? 2 : 1); ban[i].add(drop); again = true; } }
+      if (!again) break;
+    }
+    let changed = 0, lockedChanged = 0, strands = 0;
+    out.F.forEach((row, i) => row.forEach((v, c) => { const d = v !== F[i][c] || out.Y[i][c] !== Y[i][c]; if (d) { changed++; if (lock && lock[i][c]) lockedChanged++; if (out.Y[i][c] && !Y[i][c]) strands++; } }));
+    return Object.assign(out, { changed, lockedChanged, strands });
+  }
+
+  root.Mosaic = { fixColors, fixDesign, groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
   if (typeof module !== 'undefined') module.exports = root.Mosaic;
 })(typeof window !== 'undefined' ? window : globalThis);

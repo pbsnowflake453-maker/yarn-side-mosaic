@@ -10,36 +10,37 @@
   const validHex = h => /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(h.trim());
   const normHex = h => { h = h.trim().toLowerCase(); if (!h.startsWith('#')) h = '#' + h; if (h.length === 4) h = '#' + h.slice(1).split('').map(c => c + c).join(''); return h; };
 
-  /* plan = { A: [{row, hex}], B: [{row, hex}] } sorted by row; first entry is row 1 (A) / row 2 (B). */
-  const defaultPlan = () => ({ A: [{ row: 1, hex: '#ffffff' }], B: [{ row: 2, hex: '#1a1a1a' }] });
+  /* plan = { A, B, C, D: [{row, hex}] } sorted by row. A and B are the row yarns (first entries row 1 / row 2);
+     C and D are carried strands (first entry row 1). Any letter can change color on any row of its own. */
+  const defaultPlan = () => ({ A: [{ row: 1, hex: '#ffffff' }], B: [{ row: 2, hex: '#1a1a1a' }], C: [{ row: 1, hex: '#c8102e' }], D: [{ row: 1, hex: '#2e8b57' }] });
+  const fullPlan = p => Object.assign(defaultPlan(), p || {});
   const yarnOf = r => (color(r) ? 'B' : 'A');
-  function hexAt(plan, r) { const list = plan[yarnOf(r)]; let h = list[0].hex; for (const e of list) if (e.row <= r) h = e.hex; return h; }
-  const xCount = (X, r) => (r >= 1 && r <= X.length ? X[r - 1].reduce((a, b) => a + b, 0) : 0);
-  /* Add a change: from row r upward the yarn of row r becomes hex. Snaps to a clean spot:
-     - the new color (and the color before it) must each last >= 3 rows of that yarn (every other row = 6 chart rows)
-     - prefer a row with no X's (its dc's would drop into the old shade 2 rows below), else the fewest X's nearby. */
-  function addChange(plan, X, r, hex) {
-    const H = X.length, y = yarnOf(r), list = plan[y].map(e => ({ ...e })), first = list[0].row;
-    if (r <= first) { list[0].hex = hex; plan = { ...plan, [y]: list }; return { plan, note: '' }; }
-    const others = list.filter(e => e.row !== r), prev = others.filter(e => e.row < r).pop(), next = others.find(e => e.row > r);
-    const lo = (prev ? prev.row : first) + 6, hi = Math.min(next ? next.row - 6 : Infinity, H - 4);
-    if (lo > hi) return { plan, note: `No room for a new ${y} color here: each color needs at least 3 rows of its own.` };
-    let start = Math.min(Math.max(r, lo), hi); if ((start - r) % 2) start++;
-    let best = null;   // first clean row (no X) within 3 rows of this yarn, else the fewest-X row within 2
-    for (let q = start; q <= Math.min(hi, start + 6); q += 2) if (xCount(X, q) === 0) { best = { q, k: 0 }; break; }
-    if (!best) for (let q = start; q <= Math.min(hi, start + 4); q += 2) { const k = xCount(X, q); if (!best || k < best.k) best = { q, k }; }
-    if (!best) return { plan, note: `No room for a new ${y} color here: each color needs at least 3 rows of its own.` };
-    let note = '';
-    if (best.q !== r) note = `Moved to row ${best.q} (from ${r}): ` + (r < lo || r > hi ? 'each color needs at least 3 rows of its own' : (best.k ? `row ${best.q} has the fewest X's nearby (${best.k}) dropping into the old shade` : `row ${best.q} has no X's, so no dropped stitch reaches into the old shade`)) + '.';
-    else if (best.k) note = `Row ${r} has ${best.k} X's dropping into the previous shade (no cleaner row nearby).`;
-    const out = others.concat([{ row: best.q, hex }]).sort((a, b) => a.row - b.row);
-    const dedup = out.filter((e, i) => i === 0 || e.hex !== out[i - 1].hex);   // drop no-op changes
-    return { plan: { ...plan, [y]: dedup }, note };
+  /* color of letter L at row r: the last change at or below r */
+  function colorOf(plan, L, r) { const list = fullPlan(plan)[L]; let h = list[0].hex; for (const e of list) if (e.row <= r) h = e.hex; return h; }
+  const hexAt = (plan, r) => colorOf(plan, yarnOf(r), r);
+  /* label used in patterns: A, or A1 / A2 / ... when A changes color */
+  function labelAt(plan, L, r) { const list = fullPlan(plan)[L]; if (list.length < 2) return L; let k = 0; list.forEach((e, i) => { if (e.row <= r) k = i; }); return L + (k + 1); }
+  /* from row r upward, letter L (default: row r's own yarn) becomes hex. A / B changes sit on rows of that yarn. */
+  function addChange(plan, X, r, hex, L) {
+    plan = fullPlan(plan); L = L || yarnOf(r);
+    if ((L === 'A' || L === 'B') && yarnOf(r) !== L) r++;          // an A change goes on an A row, B on a B row
+    const list = plan[L].map(e => ({ ...e })), first = list[0].row;
+    if (r <= first) list[0].hex = hex; else { const i = list.findIndex(e => e.row === r); if (i >= 0) list[i].hex = hex; else list.push({ row: r, hex }); }
+    list.sort((a, b) => a.row - b.row);
+    const dedup = list.filter((e, i) => i === 0 || e.hex !== list[i - 1].hex);   // drop no-op changes
+    return { plan: { ...plan, [L]: dedup }, note: '' };
   }
+  /* a plan from per-row colors: rows = { A: {row: hex}, ... }; rows without an entry keep the color below them */
+  function planFromRows(rows, H, fallback) { const plan = fullPlan(fallback);
+    for (const L of ['A', 'B', 'C', 'D']) { const m = rows[L] || {}, keys = Object.keys(m).map(Number).sort((a, b) => a - b); if (!keys.length) continue;
+      const first = L === 'B' ? 2 : 1, list = [{ row: first, hex: m[keys[0]] }];
+      for (const k of keys) if (m[k] !== list[list.length - 1].hex) list.push({ row: Math.max(first, k), hex: m[k] });
+      plan[L] = list; }
+    return plan; }
   function legend(plan, H) {
-    const out = [];
+    const out = []; plan = fullPlan(plan);
     for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const nx = plan[y][i + 1]; let to = nx ? nx.row - 2 : H; if (yarnOf(to) !== y) to--; out.push({ yarn: y, hex: e.hex, rgb: hexToRgb(e.hex), from: e.row, to }); });
     return out;
   }
-  root.MosaicColors = { STARTERS, loadBank, saveBank, validHex, normHex, hexToRgb, defaultPlan, hexAt, addChange, legend, yarnOf };
+  root.MosaicColors = { STARTERS, loadBank, saveBank, validHex, normHex, hexToRgb, defaultPlan, fullPlan, colorOf, labelAt, hexAt, addChange, planFromRows, legend, yarnOf };
 })(typeof window !== 'undefined' ? window : globalThis);

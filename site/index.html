@@ -14,9 +14,12 @@
    <div class="row"><label>Columns <input type="number" id="nx" min="2" max="300"></label><label>Rows <input type="number" id="ny" min="2" max="300"></label><button class="sec" id="resample">Re-read</button></div>
    <div class="out"><canvas id="gridCv"></canvas></div></details>
   <h3>Colors → letters</h3>
-  <p class="small">Under each color, tap its letter: <b>A</b> background, <b>B</b> contrast, <b>C</b> / <b>D</b> extra strands carried along the row and swapped in where they show.</p>
+  <p class="small">Give every color a letter: <b>A</b> background, <b>B</b> contrast, <b>C</b> / <b>D</b> extra strands carried along the row and swapped in where they show. Tap a color to see where it is in the picture. The picture keeps its own colors until you tap <b>Show letters</b>.</p>
   <div class="row" id="swatches"></div>
-  <div class="row"><button class="sec" id="autoBtn">Auto A/B</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">By brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button><button class="sec" id="impUndo" disabled>Undo</button></div>
+  <p class="small" id="leftNote"></p>
+  <div class="row"><button class="sec" id="restA" hidden>Make the rest A</button><button class="sec" id="showLetters">Show letters</button></div>
+  <div class="row letters" id="letters"></div>
+  <div class="row"><span class="small">Fill in for me:</span><button class="sec" id="autoBtn">Auto A/B</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">By brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button><button class="sec" id="impUndo" disabled>Undo</button></div>
   <p class="small note" id="palNote"></p>
   <div class="out"><canvas id="monoCv"></canvas></div>
   <div class="row"><span class="small">Size:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button><span class="small">each square becomes 1, 2×2 or 3×3 squares</span></div>
@@ -31,6 +34,7 @@
   <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D"><i class="dot"></i>D</button><button class="sec" data-tool="keep">Keep</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
   <div class="row"><span class="small lab">Lean</span><button class="sec gsym" data-tool="g1" title="2 dc in next st then sk 1">\|</button><button class="sec gsym" data-tool="g2" title="sk 1 then 2 dc in next st">|/</button><button class="sec gsym" data-tool="g3" title="sk 1 then 3 dc in next st then sk 1">\|/</button><button class="sec" data-tool="g0">No lean</button><label class="small chk"><input type="checkbox" id="showX"> Show X's</label></div>
   <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button id="dFix" disabled>Fix</button><button class="sec" id="dOpts">More fix options</button><span class="zoom"><button class="sec" id="dOut" title="Smaller">&minus;</button><button class="sec" id="dIn" title="Bigger">+</button></span></div>
+  <div class="row fixSet"><span class="small lab">Fix may</span><label class="small chk"><input type="checkbox" id="fixNear" checked> use a C / D color a square touches</label><label class="small chk"><input type="checkbox" id="fixCarry"> carry a strand to keep the picture as drawn</label></div>
  </div>
  <p class="small dnote" id="dNote"></p>
  <div class="out" id="dWrap"><canvas id="dCv"></canvas></div>
@@ -50,7 +54,8 @@
  <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Design preview</button><button data-tab="fabric">Fabric</button></nav>
  <p class="small" id="summary"></p>
  <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
-  <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color: that row's yarn (A or B) changes from there up.</div>
+  <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color. The yarn you picked below changes from that row up. Any row can change.</div>
+   <div class="row"><span class="small">Change the color of:</span><button class="sec on" data-stripe="row">That row's yarn (A or B)</button><button class="sec" data-stripe="C">C</button><button class="sec" data-stripe="D">D</button></div>
    <div class="row" id="bank"></div>
    <div class="row"><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add</button><button class="sec" id="resetStripes">Remove stripes</button></div>
    <p class="small note" id="colorNote"></p></div>
@@ -74,8 +79,10 @@
   <div class="row"><span class="small lab">Move</span><button class="sec" data-mv="-1,0" title="Left">←</button><button class="sec" data-mv="0,-1" title="Up">↑</button><button class="sec" data-mv="0,1" title="Down">↓</button><button class="sec" data-mv="1,0" title="Right">→</button></div>
   <div class="row"><span class="small lab">Crop</span><button class="sec" data-crop="t,1">top −</button><button class="sec" data-crop="t,-1">top +</button><button class="sec" data-crop="b,1">bottom −</button><button class="sec" data-crop="b,-1">bottom +</button></div>
   <div class="row"><span class="small lab"></span><button class="sec" data-crop="l,1">left −</button><button class="sec" data-crop="l,-1">left +</button><button class="sec" data-crop="r,1">right −</button><button class="sec" data-crop="r,-1">right +</button></div>
+  <div class="row" id="pLetters"></div>
   <div class="row"><button class="sec" id="pMirror">Mirror ↔</button><button class="sec" id="pFront">Bring to front</button><button class="sec" id="pBack">Send to back</button><button class="sec" id="pDup">Duplicate</button><button class="sec" id="pClear"></button><button class="sec" id="pDel">Remove</button></div>
   <p class="small" id="selNote"></p></div>
+ <div class="colorBox" id="colorBox" hidden></div>
  <div class="row"><button id="useBoard">Open board in Design</button><span class="small" id="boardNote"></span></div>
 </section>
 </div>

@@ -136,7 +136,7 @@
       y = yy - 62; }
     para(`Written: Row ${ex} (${nm(exY)}): ${shortBody} The X squares are the dc stitches; the plain squares are the sc stitches.`, 54, 10.5, false);
     y -= 6; sec('Chart key'); Y.forEach(e => swatch(e.hex, yarnLine(e)));
-    if (EX.Y) EX.extras.forEach((e, k) => { if (EX.Y.some(row => row.includes(k + 1))) swatch(e.hex, `Color ${e.label} (carried strand): squares shaded this color are worked with ${e.label}. The written rows show them as [${e.label}: …].`); });
+    if (EX.Y) Wr().strandList(EX.extras).forEach(e => { if (EX.Y.some(row => row.includes(e.k))) swatch(e.hex, `Color ${e.label} (carried strand): squares shaded this color are worked with ${e.label}. The written rows show them as [${e.label}: …].`); });
     swatch(Y[0].hex, 'X = dc in front 2 rows down', 'X'); swatch(Y[0].hex, 'BS = border stitch', 'BS');
     if (EX.G) { const has = b => EX.G.some(row => row.includes(b));
       if (has(1)) swatch(Y[0].hex, '2 dc in next st then sk 1: the straight dc and the one to its left go into the same stitch 2 rows below.', 1);
@@ -165,7 +165,7 @@
       ink(GREY); font('normal', 8.5); text(`Part ${pi + 1} of ${ranges.length}. Work bottom up, every row RIGHT to LEFT.` + (pi ? ` Rows ${r0}-${r0 + 1} repeat the top of the previous page (below the teal line).` : ''), 54, LH - 96);
       for (let r = r0; r <= r1; r++) { const yy = ybot + (r - r0) * cs, e = yarnFor(Y, r), ik = lum(rgbOf(e.hex)) < 140 ? '#ffffff' : '#1a1a1a';
         stroke('#555555'); doc.setLineWidth(.3);
-        const cellHex = k => (EX.Y && k > 0 && k < n - 1 && EX.Y[r - 1][k - 1] ? EX.extras[EX.Y[r - 1][k - 1] - 1].hex : e.hex);
+        const cellHex = k => (EX.Y && k > 0 && k < n - 1 && EX.Y[r - 1][k - 1] ? Wr().strandAt(EX.extras, EX.Y[r - 1][k - 1], r).hex : e.hex);
         for (let k = 0; k < n; k++) { fill(cellHex(k)); rect(x0 + k * cs, yy, cs, cs, true, true); }
         for (let k = 0; k < n; k++) { const xx = x0 + k * cs, ik = lum(rgbOf(cellHex(k))) < 140 ? '#ffffff' : '#1a1a1a';
           if (k === 0 || k === n - 1) { if (cs >= 6) { ink(ik); font('bold', Math.min(5, cs * 0.42)); text('BS', xx + cs / 2, yy + cs / 2 - cs * 0.15, { align: 'center' }); } else { fill(ik); rect(xx + cs * .35, yy + cs * .35, cs * .3, cs * .3, true); } }
@@ -178,7 +178,7 @@
         gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#ffffff', Math.max(1.2, cs / 6)); gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#1a1a1a', Math.max(.6, cs / 14)); });
       const top = ybot + (r1 - r0 + 1) * cs, nf = Math.max(2.8, Math.min(6.5, cs * 0.55)); ink(DARK); font('normal', nf);
       for (let k = 0; k < n; k++) { const s = String(n - k), xx = x0 + k * cs + cs / 2; if (cs < 6 && (n - k) % 5 && n - k !== 1 && n - k !== n) continue; text(s, xx, top + 3, { align: 'center' }); text(s, xx, ybot - nf - 2, { align: 'center' }); }
-      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? EX.extras.filter((e, k) => EX.Y.some(row => row.includes(k + 1))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']])
+      const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? Wr().strandList(EX.extras).filter(e => EX.Y.some(row => row.includes(e.k))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']])
         .concat(EX.G ? [[1, '2 dc in next st then sk 1'], [2, 'sk 1 then 2 dc in next st'], [3, 'sk 1 then 3 dc in next st then sk 1']].filter(([b]) => EX.G.some(row => row.includes(b))).map(([b, t]) => [Y[0].hex, b, t]) : []);
       let kx = 54, ky = ybot - 30; font('normal', 8);
       items.forEach(([hx, m, t]) => { const tw = width(t, 'normal', 8) + 30; if (kx + tw > LW - 54) { kx = 54; ky -= 16; }
