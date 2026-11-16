@@ -205,7 +205,8 @@
     const show = D.two.length ? D.bad.map((r, i) => r.map((v, c) => (v || (D.two.includes(i) && D.Y[i][c]) ? 1 : 0))) : D.bad;
     const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.vis, bad: show, mine: d.K, auto: d.auto, groups: d.G });
     if (st.showX) { const g = cv.getContext('2d'), k = cell, p = Math.max(2, k * 0.25); g.lineWidth = Math.max(1, k / 10);
-      D.X.forEach((row, i) => row.forEach((v, c) => { if (!v || d.G[i][c]) return; const x = c * k, y = (D.H - 1 - i) * k, rgb = D.vis(i, c);
+      const isLean = (i, c) => d.G[i] && ((c > 0 && d.G[i][c - 1] & 2) || (c + 1 < D.W && d.G[i][c + 1] & 1) || d.G[i][c]);
+      D.X.forEach((row, i) => row.forEach((v, c) => { if ((!v && !isLean(i, c)) || d.G[i][c]) return; const x = c * k, y = (D.H - 1 - i) * k, rgb = D.vis(i, c);
         g.strokeStyle = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) < 140 ? '#fff' : '#1a1a1a'; g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + k - p, y + k - p); g.moveTo(x + k - p, y + p); g.lineTo(x + p, y + k - p); g.stroke(); })); }
     replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
     bindPaint(cv, D);
