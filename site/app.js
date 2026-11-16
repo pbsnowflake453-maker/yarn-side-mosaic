@@ -352,7 +352,11 @@
     $('summary').textContent = `${D.W + 2} stitches (with border stitches) × ${D.H} rows + chain · ${D.X.flat().reduce((a, b) => a + b, 0)} dc's` + (hasG() ? ` · ${st.d.G.flat().filter(v => v).length} leaning group(s)` : '') + (D.n ? ' · not workable yet (red squares)' : '');
     if (st.tab === 'chart') { const cv = replace('chartCv', Rn.drawChart(D.F, D.X, chartOpts(D, { selRow: st.selRow })));
       cv.onclick = e => { const g = cv._geo, sc = cv.height / cv.clientHeight, y = e.offsetY * sc, k = Math.floor((y - g.top) / g.cell), row = g.H - k;
-        if (row < 1 || row > g.H) return; st.selRow = row; note('colorNote', `Row ${row} selected (${C.yarnOf(row)} yarn, now ${C.hexAt(st.plan, row)}). Tap a color.`); render(); };
+        if (row < 1 || row > g.H) return; st.selRow = row;
+        const i = row - 1, cnt = { A: 0, B: 0, C: 0, D: 0 };
+        st.d.P[i].forEach(L => { cnt[L || 'A']++; });
+        const sum = 'ABCD'.split('').map(L => cnt[L] ? L + ':' + cnt[L] : '').filter(Boolean).join(' ');
+        note('colorNote', `Row ${row} selected (${C.yarnOf(row)} yarn). Letters on this row: ${sum || 'empty'}. Pick from/to below to swap.`); render(); };
       drawBank(); }
     if (st.tab === 'written') $('written').textContent = W8().directions(D.X, st.plan, dirOpts(D));
     if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, stitchRGB: stitchRGB(D), lean: leanFn() }));
@@ -363,15 +367,24 @@
     const L = st.stripeFor === 'row' ? C.yarnOf(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
     note('colorNote', res.note || `From row ${st.selRow} up, ${L === 'C' || L === 'D' ? 'carried strand ' + L : 'the ' + L + ' yarn'} is ${hex}.`); }
   document.querySelectorAll('[data-stripe]').forEach(b => b.onclick = () => { st.stripeFor = b.dataset.stripe; document.querySelectorAll('[data-stripe]').forEach(x => x.classList.toggle('on', x === b)); });
-  /* Swap letters on the selected row only (row by row) so the fixer sees the new role. */
+  /* Swap letters on the selected row only. User picks from-letter and to-letter. */
+  let swapFrom = 'A';
+  document.querySelectorAll('[data-from]').forEach(b => b.onclick = () => {
+    swapFrom = b.dataset.from;
+    document.querySelectorAll('[data-from]').forEach(x => x.classList.toggle('on', x === b));
+  });
   document.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => {
     if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
-    const to = b.dataset.swap, from = C.yarnOf(st.selRow), d = st.d, i = st.selRow - 1;
-    if (from === to) return note('colorNote', `Row ${st.selRow} is already ${from}.`);
+    const to = b.dataset.swap, from = swapFrom, d = st.d, i = st.selRow - 1;
+    if (from === to) return note('colorNote', `From and to are both ${from}.`);
+    const counts = { A: 0, B: 0, C: 0, D: 0 };
+    for (let c = 0; c < d.P[i].length; c++) counts[d.P[i][c] || 'A']++;
+    const summary = 'ABCD'.split('').map(L => counts[L] ? L + ':' + counts[L] : '').filter(Boolean).join(' ');
+    if (!counts[from]) return note('colorNote', `Row ${st.selRow} has no ${from} squares. On this row: ${summary || 'empty'}.`);
     push(); let n = 0;
     for (let c = 0; c < d.P[i].length; c++) if (d.P[i][c] === from) { d.P[i][c] = to; d.mine[i][c] = 1; n++; }
-    changed(`On row ${st.selRow}, ${n} ${from} square${n === 1 ? '' : 's'} became ${to}. The fixer sees them as ${to} now.`);
-    note('colorNote', `Swapped ${from} → ${to} on row ${st.selRow} only (${n} squares).`);
+    changed(`On row ${st.selRow}, ${n} ${from} square${n === 1 ? '' : 's'} became ${to}.`);
+    note('colorNote', `Swapped ${from} → ${to} on row ${st.selRow} (${n} squares). Now: ${'ABCD'.split('').map(L => (L === from ? 0 : L === to ? counts[to] + n : counts[L]) ? L + ':' + (L === to ? counts[to] + n : L === from ? 0 : counts[L]) : '').filter(Boolean).join(' ')}`);
   });
   function drawBank() { const box = $('bank'); box.innerHTML = '';
     st.bank.forEach(hex => { const d = document.createElement('div'); d.className = 'bank-sw'; d.style.background = hex; d.title = hex; d.onclick = () => pick(hex);
