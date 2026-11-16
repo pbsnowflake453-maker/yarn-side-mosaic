@@ -134,7 +134,7 @@
   function openDesign(rows, colors, groups, msg) {
     const H = rows.length, W = rows[0].length, P = []; for (let i = H - 1; i >= 0; i--) P.push([...rows[i]]);
     const G = zeros(H, W); (groups || []).forEach(([t, c, b]) => { const i = H - 1 - t; if (i >= 0 && i < H && c >= 0 && c < W) G[i][c] = b; });
-    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {} }; st.hist = []; st.opts = []; $('optsBox').hidden = true; st.selRow = null;
+    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: new Array(H).fill(null) }; st.hist = []; st.opts = []; $('optsBox').hidden = true; st.selRow = null;
     st.plan = toPlan(colors);
     const lost = cleanAll(); setView('design'); note('dNote', msg + (lost ? ` ${lost} leaning group${lost > 1 ? 's' : ''} didn't fit and came out.` : '')); $('dNote').dataset.keep = 1; render();
   }
@@ -158,10 +158,15 @@
     }
     return F;
   }
+  /* Yarn for a row: override if set, otherwise the traditional odd=A / even=B. */
+  const ownYarn = r => { const y = st.d && st.d.yarn && st.d.yarn[r - 1]; return y || (M.color(r) ? 'B' : 'A'); };
+  const ownColor = i => ownYarn(i + 1) === 'B' ? 1 : 0;
   function derive() { const d = st.d, H = d.P.length, W = d.P[0].length, F = zeros(H, W), Y = zeros(H, W);
-    d.P.forEach((row, i) => row.forEach((L, c) => { if (L === 'B') F[i][c] = 1; else if (L === 'A') F[i][c] = 0; else { F[i][c] = M.color(i + 1); Y[i][c] = L === 'C' ? 1 : 2; } }));
-    preferCarriedDc(F, Y); // prefer dc for C/D under the two-rows-up + X-in-between rule
-    const X = M.check(F).X, pc = M.problemCells(F), bad = pc.bad; let n = pc.n, spots = pc.spots;
+    if (!d.yarn) d.yarn = new Array(H).fill(null);
+    d.P.forEach((row, i) => row.forEach((L, c) => { if (L === 'B') F[i][c] = 1; else if (L === 'A') F[i][c] = 0; else { F[i][c] = ownColor(i); Y[i][c] = L === 'C' ? 1 : 2; } }));
+    preferCarriedDc(F, Y);
+    const colFn = r => ownColor(r - 1);
+    const X = M.check(F, colFn).X, pc = M.problemCells(F, colFn), bad = pc.bad; let n = pc.n, spots = pc.spots;
     // C / D can now be dc (X worked in the carried strand) when the geometry allows; no longer forced to sc
     // (the old penalty for X on a Y cell is removed so the fixer can choose it when cheaper)
     const vis = (i, c) => { const s = i + 1 < H && X[i + 1][c] ? i + 1 : i; return Y[s][c] ? strandRGB(Y[s][c], s + 1) : rowRGB(s + 1); };
@@ -169,7 +174,7 @@
     const two = []; Y.forEach((row, i) => { if (row.includes(1) && row.includes(2)) two.push(i); });
     return { H, W, F, Y, X, bad, n, spots, vis, two };
   }
-  const rowRGB = r => C.hexToRgb(C.hexAt(st.plan, r));
+  const rowRGB = r => C.hexToRgb(C.colorOf(st.plan, ownYarn(r), r));
   const extras = () => ({ at: (k, r) => ({ label: C.labelAt(st.plan, 'CD'[k - 1], r), hex: C.colorOf(st.plan, 'CD'[k - 1], r) }),
     list: [1, 2].flatMap(k => st.plan['CD'[k - 1]].map((e, i, a) => ({ k, label: a.length > 1 ? 'CD'[k - 1] + (i + 1) : 'CD'[k - 1], hex: e.hex, row: e.row }))) });
   const any = A => A.some(r => r.some(v => v));
@@ -188,7 +193,7 @@
   }
   function cleanAll() { const d = st.d; if (!any(d.G)) return 0; const D = derive(); let lost = M.cleanGroups(D.X, d.G);
     d.G.forEach((row, i) => row.forEach((v, b) => { if (v && M.groupCols(d.G, i, b).some(c => D.Y[i][c])) { d.G[i][b] = 0; lost++; } })); return lost; }
-  const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto) }; };
+  const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto), yarn: (d.yarn || []).slice() }; };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   function push() { st.hist.push(snap()); if (st.hist.length > 200) st.hist.shift(); }
   function changed(msg) { const lost = cleanAll(); if (lost) msg = (msg ? msg + ' ' : '') + `${lost} leaning group${lost > 1 ? 's' : ''} came out because the stitches under ${lost > 1 ? 'them' : 'it'} changed. Undo brings ${lost > 1 ? 'them' : 'it'} back.`;
@@ -209,7 +214,7 @@
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
       ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Fix</b> to change the fewest squares. Your painted squares and Keep squares stay if at all possible.`
-        + (D.bad[D.H - 1].some(v => v) && D.H % 2 === 0 ? ' <br>The top row is a B row (even number of rows), and the top row can only show its own color. Adding or removing one row at the top usually clears this.' : '')
+        + (D.bad[D.H - 1].some(v => v) ? ' <br>The top row has squares that can\'t be covered (nothing above them). Adding a row at the top, or changing those squares to the row\'s yarn, usually clears this.' : '')
       : '<b class="ok">✔ Workable.</b> Every square can be crocheted as shown.')
       );
     else $('dNote').querySelectorAll('.flag').forEach(e => e.remove());
@@ -311,9 +316,12 @@
     while (m.bottom < H && emptyRow(P[m.bottom])) m.bottom++; while (m.top < H - m.bottom && emptyRow(P[H - 1 - m.top])) m.top++;
     while (m.left < W && emptyRow(col(m.left))) m.left++; while (m.right < W - m.left && emptyRow(col(W - 1 - m.right))) m.right++; return m; }
   function rows(side, n) { const d = st.d; let lost = 0;
-    for (let k = 0; k < Math.abs(n); k++) LAYERS.forEach(L => { const A = d[L], W = A[0].length;
+    if (!d.yarn) d.yarn = new Array(d.P.length).fill(null);
+    for (let k = 0; k < Math.abs(n); k++) { LAYERS.forEach(L => { const A = d[L], W = A[0].length;
       if (n > 0) { const r = new Array(W).fill(blank(L)); side === 'top' ? A.push(r) : A.unshift(r); }
       else { const r = side === 'top' ? A.pop() : A.shift(); if (L === 'P') lost += r.filter(x => x !== 'A').length; } });
+      if (n > 0) side === 'top' ? d.yarn.push(null) : d.yarn.unshift(null);
+      else side === 'top' ? d.yarn.pop() : d.yarn.shift(); }
     return lost; }
   function cols(side, n) { const d = st.d; let lost = 0;
     for (let k = 0; k < Math.abs(n); k++) LAYERS.forEach(L => d[L].forEach(r => { if (n > 0) side === 'left' ? r.unshift(blank(L)) : r.push(blank(L)); else { const x = side === 'left' ? r.shift() : r.pop(); if (L === 'P' && x !== 'A') lost++; } }));
@@ -344,9 +352,9 @@
   const stitchRGB = D => (hasY(D) ? (i, c) => (D.Y[i][c] ? strandRGB(D.Y[i][c], i + 1) : null) : null);
   const carryTag = D => (hasY(D) ? row => [...new Set(D.Y[row - 1].filter(v => v))].sort().map(k => '+' + 'CD'[k - 1]).join('') : null);
   const extraLegend = D => (hasY(D) ? extras().list.filter(e => D.Y.some(x => x.includes(e.k))).map(e => ({ hex: e.hex, rgb: C.hexToRgb(e.hex), text: `${e.hex.toUpperCase()}  ·  ${e.label} (carried strand${e.row > 1 ? `, from row ${e.row}` : ''})` })) : []);
-  const dirOpts = D => Object.assign(hasY(D) ? { Y: D.Y, extras: extras() } : {}, hasG() ? { G: st.d.G } : {});
+  const dirOpts = D => Object.assign(hasY(D) ? { Y: D.Y, extras: extras() } : {}, hasG() ? { G: st.d.G } : {}, { yarnOf: ownYarn });
   const leanFn = () => (hasG() ? (i, c) => M.leanAt(st.d.G, i, c) : null);
-  const chartOpts = (D, extra) => Object.assign({ cell: D.W > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(D), carry: carryTag(D), groups: hasG() ? st.d.G : null }, extra);
+  const chartOpts = (D, extra) => Object.assign({ cell: D.W > 60 ? 18 : 24, rowRGB, stitchRGB: stitchRGB(D), carry: carryTag(D), groups: hasG() ? st.d.G : null, yarnLabel: ownYarn }, extra);
   function renderOut(D) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab)); ['chart', 'written', 'preview', 'fabric'].forEach(t => { $(t + 'Tab').hidden = t !== st.tab; });
     $('summary').textContent = `${D.W + 2} stitches (with border stitches) × ${D.H} rows + chain · ${D.X.flat().reduce((a, b) => a + b, 0)} dc's` + (hasG() ? ` · ${st.d.G.flat().filter(v => v).length} leaning group(s)` : '') + (D.n ? ' · not workable yet (red squares)' : '');
@@ -356,7 +364,7 @@
         const i = row - 1, cnt = { A: 0, B: 0, C: 0, D: 0 };
         st.d.P[i].forEach(L => { cnt[L || 'A']++; });
         const sum = 'ABCD'.split('').map(L => cnt[L] ? L + ':' + cnt[L] : '').filter(Boolean).join(' ');
-        note('colorNote', `Row ${row} selected (${C.yarnOf(row)} yarn). Letters on this row: ${sum || 'empty'}. Pick from/to below to swap.`); render(); };
+        note('colorNote', `Row ${row} selected (worked in ${ownYarn(row)}). Letters on this row: ${sum || 'empty'}. Swap letters or change the row's yarn below.`); render(); };
       drawBank(); }
     if (st.tab === 'written') $('written').textContent = W8().directions(D.X, st.plan, dirOpts(D));
     if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, stitchRGB: stitchRGB(D), lean: leanFn() }));
@@ -364,10 +372,17 @@
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { st.tab = b.dataset.tab; render(); });
   function pick(hex) { if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
-    const L = st.stripeFor === 'row' ? C.yarnOf(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
+    const L = st.stripeFor === 'row' ? ownYarn(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
     note('colorNote', res.note || `From row ${st.selRow} up, ${L === 'C' || L === 'D' ? 'carried strand ' + L : 'the ' + L + ' yarn'} is ${hex}.`); }
   document.querySelectorAll('[data-stripe]').forEach(b => b.onclick = () => { st.stripeFor = b.dataset.stripe; document.querySelectorAll('[data-stripe]').forEach(x => x.classList.toggle('on', x === b)); });
-  /* Swap letters on the selected row only. User picks from-letter and to-letter. */
+  /* Row yarn override: work a row in A or B regardless of parity, or flip from here up. */
+  function setYarn(row, y) { if (!st.d.yarn) st.d.yarn = new Array(st.d.P.length).fill(null); st.d.yarn[row - 1] = y; }
+  $('yarnA').onclick = () => { if (st.selRow == null) return note('colorNote', 'Tap a row first.'); push(); setYarn(st.selRow, 'A'); changed(`Row ${st.selRow} now worked in A.`); note('colorNote', `Row ${st.selRow} worked in A.`); };
+  $('yarnB').onclick = () => { if (st.selRow == null) return note('colorNote', 'Tap a row first.'); push(); setYarn(st.selRow, 'B'); changed(`Row ${st.selRow} now worked in B.`); note('colorNote', `Row ${st.selRow} worked in B.`); };
+  $('yarnFlip').onclick = () => { if (st.selRow == null) return note('colorNote', 'Tap a row first.'); push();
+    for (let r = st.selRow; r <= st.d.P.length; r++) setYarn(r, ownYarn(r) === 'A' ? 'B' : 'A');
+    changed(`Flipped A/B from row ${st.selRow} up.`); note('colorNote', `A and B swapped from row ${st.selRow} up.`); };
+  $('yarnReset').onclick = () => { if (!st.d) return; push(); st.d.yarn = new Array(st.d.P.length).fill(null); changed('Yarn reset to odd = A, even = B.'); note('colorNote', 'Reset to odd/even.'); };
   let swapFrom = 'A';
   document.querySelectorAll('[data-from]').forEach(b => b.onclick = () => {
     swapFrom = b.dataset.from;

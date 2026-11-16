@@ -9,10 +9,10 @@
   const zeros = (h, w) => Array.from({ length: h }, () => new Array(w).fill(0));
   const clone = G => G.map(r => r.slice());
 
-  function check(T) {
-    const H = T.length, W = T[0].length, X = zeros(H, W), bad = [];
+  function check(T, colFn) {
+    const col = colFn || color, H = T.length, W = T[0].length, X = zeros(H, W), bad = [];
     for (let i = 0; i < H; i++) for (let c = W - 1; c >= 0; c--) {
-      if (T[i][c] !== color(i + 1)) {
+      if (T[i][c] !== col(i + 1)) {
         if (i + 1 >= H) bad.push([i + 1, c, 'top row cannot be covered']); else X[i + 1][c] = 1;
       }
     }
@@ -219,9 +219,9 @@
   }
 
   /* Cells (bottom-up F) that can't be worked: a mismatch in the top row, or two mismatches stacked in a column. */
-  function problemCells(F) {
-    const H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0, spots = 0;   // n = squares, spots = conflicts
-    const mis = (i, c) => F[i][c] !== color(i + 1);
+  function problemCells(F, colFn) {
+    const col = colFn || color, H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0, spots = 0;
+    const mis = (i, c) => F[i][c] !== col(i + 1);
     for (let c = 0; c < W; c++) for (let i = 0; i < H; i++) if (mis(i, c)) {
       if (i === H - 1) { spots++; if (!bad[i][c]) n++; bad[i][c] = 1; }
       if (i > 0 && mis(i - 1, c)) { if (!(bad[i - 1][c] && i > 1 && mis(i - 2, c) && bad[i - 2][c])) spots++; if (!bad[i][c]) n++; if (!bad[i - 1][c]) n++; bad[i][c] = bad[i - 1][c] = 1; }

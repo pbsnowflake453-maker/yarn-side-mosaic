@@ -57,7 +57,11 @@
  <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
   <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color. The yarn you picked below changes from that row up. Any row can change.</div>
    <div class="row"><span class="small">Change the color of:</span><button class="sec on" data-stripe="row">That row's yarn (A or B)</button><button class="sec" data-stripe="C">C</button><button class="sec" data-stripe="D">D</button></div>
-   <div class="row"><span class="small">Swap letters on the selected row only:</span>
+   <div class="row"><span class="small">Row yarn (not locked to odd/even):</span>
+     <button class="sec" id="yarnA">Work this row in A</button><button class="sec" id="yarnB">Work this row in B</button>
+     <button class="sec" id="yarnFlip">Flip A/B from this row up</button>
+     <button class="sec" id="yarnReset">Reset to odd/even</button>
+   </div>
      <span class="small">from</span><button class="sec on" data-from="A">A</button><button class="sec" data-from="B">B</button><button class="sec" data-from="C">C</button><button class="sec" data-from="D">D</button>
      <span class="small">to</span><button class="sec" data-swap="A">A</button><button class="sec" data-swap="B">B</button><button class="sec" data-swap="C">C</button><button class="sec" data-swap="D">D</button>
    </div>

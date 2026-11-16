@@ -85,7 +85,7 @@
         else if (X[i][k - 1]) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
           g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + cell - p, y + cell - p); g.moveTo(x + cell - p, y + p); g.lineTo(x + p, y + cell - p); g.stroke(); }
       }
-      label(r, y, (rc ? 'B' : 'A') + (opts.carry ? opts.carry(r) : ''));
+      label(r, y, (opts.yarnLabel ? opts.yarnLabel(r) : (rc ? 'B' : 'A')) + (opts.carry ? opts.carry(r) : ''));
     }
     drawGroups(g, opts.groups, c => L + (c + 1) * cell + cell / 2, i => top + (H - 1 - i) * cell, cell, { lw: Math.max(1.5, cell / 12) });
     const y0 = top + H * cell;
