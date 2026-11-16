@@ -253,7 +253,7 @@
     changed(`<b class="ok">✔ Added</b> ${{ 1: '\\|', 2: '|/', 3: '\\|/' }[bits]} on row ${ci + 1}: the written row says “${{ 1: '2 dc in next st then sk 1', 2: 'sk 1 then 2 dc in next st', 3: 'sk 1 then 3 dc in next st then sk 1' }[bits]}”.`); }
 
   /* tools */
-  const HELP = { A: 'Tap or drag to paint A (background).', B: 'Tap or drag to paint B (contrast).', C: 'Tap or drag to paint C, a strand carried along the row. Can be sc or dc in that strand when the geometry allows.', D: 'Tap or drag to paint D, a second carried strand. Can be sc or dc when possible.', cycle: 'Tap to cycle the letter: A → B → C → D → A. Good for quick phone edits.' };
+  const HELP = { A: 'Tap or drag to paint A (background).', B: 'Tap or drag to paint B (contrast).', C: 'Tap or drag to paint C, a strand carried along the row. Can be sc or dc in that strand when the geometry allows.', D: 'Tap or drag to paint D, a second carried strand. Can be sc or dc when possible.', cycle: 'Tap to cycle the letter: A → B → C → D → A. Good for quick phone edits.',
     keep: 'Tap or drag over squares that must stay exactly as they are when you tap Fix (teal dots).', unkeep: 'Tap or drag over teal dots to remove them.',
     g1: 'Tap a dc (an X, or the square right under it). The stitch to its left leans into the same stitch two rows down: \\|.', g2: 'Tap a dc. The stitch to its right leans in: |/.', g3: 'Tap a dc. The stitches on both sides lean in: \\|/.', g0: 'Tap a leaning group to take it out.' };
   document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { st.tool = b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b));
