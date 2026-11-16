@@ -368,8 +368,8 @@
         note('colorNote', `Row ${row} selected (worked in ${ownYarn(row)}). Letters on this row: ${sum || 'empty'}. Swap letters or change the row's yarn below.`); render(); };
       drawBank(); }
     if (st.tab === 'written') $('written').textContent = W8().directions(D.X, st.plan, dirOpts(D));
-    if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, stitchRGB: stitchRGB(D), lean: leanFn() }));
-    if (st.tab === 'fabric') replace('fabCv', Rn.drawGrid(M.simulate(D.X), { cell: Math.max(4, Math.min(16, Math.floor(520 / D.W))), cellRGB: D.vis }));
+    if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, stitchRGB: stitchRGB(D), lean: leanFn(), yarnOf: ownYarn }));
+    if (st.tab === 'fabric') replace('fabCv', Rn.drawGrid(D.F, { cell: Math.max(4, Math.min(16, Math.floor(520 / D.W))), cellRGB: D.vis }));
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { st.tab = b.dataset.tab; render(); });
   function pick(hex) { if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');

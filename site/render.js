@@ -110,7 +110,9 @@
     let s = 7; const R = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
     const yarn = [opts.a || [238, 232, 220], opts.b || [34, 34, 38]], rowRGB = opts.rowRGB || (r => yarn[color(r)]), sh = (c, f) => css(c.map(v => Math.max(0, Math.min(255, v * f))));
     g.fillStyle = '#cdc4b6'; g.fillRect(0, 0, cv.width, cv.height);
-    g.fillStyle = sh(yarn[0], .8); g.beginPath(); g.roundRect(pad - 8, pad - 8, n * cw + 16, (H + 1) * rh + 16, 12); g.fill();
+    g.fillStyle = sh(yarn[0], .8); g.beginPath();
+    if (g.roundRect) g.roundRect(pad - 8, pad - 8, n * cw + 16, (H + 1) * rh + 16, 12); else g.rect(pad - 8, pad - 8, n * cw + 16, (H + 1) * rh + 16);
+    g.fill();
     const X0 = k => pad + k * cw, Y0 = i => pad + (H - 1 - i) * rh;
     const loop = (x, y, w, h, c) => {
       for (const side of [-1, 1]) for (const [k, f] of [[0, .6], [1, .85], [2, 1.08]]) {
@@ -121,7 +123,7 @@
       }
       g.strokeStyle = sh(c, .5); g.lineWidth = 1; g.beginPath(); g.moveTo(x + w / 2, y + 2); g.lineTo(x + w / 2, y + h - 2); g.stroke();
     };
-    const stitch = (i, col) => (opts.stitchRGB && col >= 0 && col < W && opts.stitchRGB(i, col)) || rowRGB(i + 1);
+    const stitch = (i, col) => (opts.stitchRGB && col >= 0 && col < W && opts.stitchRGB(i, col)) || (opts.rowRGB ? opts.rowRGB(i + 1) : yarn[color(i + 1)]);
     for (let i = 0; i < H; i++) for (let k = 0; k < n; k++) { const col = k - 1, cov = col >= 0 && col < W && i + 1 < H && X[i + 1][col];
       g.fillStyle = sh(cov ? stitch(i + 1, col) : stitch(i, col), .55); g.fillRect(X0(k), Y0(i), cw, rh); }
     for (let k = 0; k < n; k++) loop(X0(k) + 2, pad + H * rh + 4, cw - 4, rh - 8, rowRGB(1));
