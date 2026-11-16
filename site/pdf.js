@@ -26,6 +26,8 @@
     const rowYarn = o.yarnOf || C().yarnOf;
     const { X, plan } = o, EX = Object.assign({ yarnOf: rowYarn }, o.Y && o.Y.some(row => row.some(v => v)) ? { Y: o.Y, extras: o.extras } : {}, o.G && o.G.some(row => row.some(v => v)) ? { G: o.G } : {}), H = X.length, Wd = X[0].length, n = Wd + 2;
     const multiCarry = new Set(EX.Y ? EX.Y.flatMap((row, i) => row.includes(1) && row.includes(2) ? [i + 1] : []) : []);
+    const rowColors = r => [{ label: C().labelAt(plan, rowYarn(r), r), hex: C().colorOf(plan, rowYarn(r), r) }]
+      .concat(EX.Y ? [...new Set(EX.Y[r - 1].filter(Boolean))].sort().map(k => Wr().strandAt(EX.extras, k, r)) : []);
     const title = clean(o.title).trim(), names = o.names || {}, Y = yarns(plan, H, rowYarn);
     const nm = e => { const v = clean(names[e.key] || '').trim(); return v ? `${e.label} - ${v}` : e.label; };
     const doc = new root.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
@@ -103,7 +105,8 @@
     para('There are lots of video tutorials online that will help explain the overlay mosaic process. Try searching "overlay mosaic crochet tutorial" on YouTube.', 64, 10.5, false); footer(); });
 
     // chart pagination (needed for the read-the-chart page)
-    const LW = 792, LH = 612, cs = Math.min(12, (LW - 108 - 80) / n), gridTop = LH - 118, keyRows = Math.ceil((Y.length + 2 + (multiCarry.size ? 1 : 0)) / 4), gridBot = 70 + 30 + keyRows * 16;
+    const largestRowKey = Math.max(...Array.from({ length: H }, (_, i) => rowColors(i + 1).reduce((sum, e, j) => sum + 8 + width(e.label, 'bold', 7.5) + (j ? width('+', 'bold', 7.5) + 4 : 0), 0)));
+    const LW = 792, LH = 612, rowGutter = Math.max(68, 22 + largestRowKey + (multiCarry.size ? 16 : 0)), cs = Math.min(12, (LW - 108 - 2 * rowGutter) / n), gridTop = LH - 118, keyRows = Math.ceil((Y.length + 2 + (multiCarry.size ? 1 : 0)) / 4), gridBot = 70 + 30 + keyRows * 16;
     const per = Math.max(6, Math.floor((gridTop - gridBot) / cs)), ranges = chartRanges(H, per);
 
     // ---------- 3. How to read the chart ----------
@@ -118,11 +121,11 @@
     const shortBody = exBody.split(', ').slice(0, 4).join(', ') + (exBody.split(', ').length > 4 ? ', ...' : '');
     const rangeTxt = ranges.map(([a, b]) => `${a}-${b}`), joinList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
     const splitTxt = ranges.length === 1 ? `The whole chart fits on one page (rows 1-${H}).` : `The chart is split over ${ranges.length} pages: rows ${joinList(rangeTxt)}. The first two rows on each page after the first repeat the top of the previous page, below a teal line, so you can find your place. Work each row once.`;
-    const colorTxt = 'Use the A or B label printed beside each row; see the color key for that yarn. Carried-strand squares use their indicated color.';
+    const colorTxt = 'Use the complete set of colors printed beside each row; see the color key for yarn names and stripe changes.';
     const tip = tipRuns.length ? `Tip: check your work against the written row in the instructions, e.g. Row ${ex}: "${shortBody}". Counting from the right of the chart, you will see BS, then ` + tipRuns.map(r => `${r.n} ${r.t === 'd' ? 'X' : 'plain'} square${r.n > 1 ? 's' : ''}`).join(', then ') + '.' : '';
     [`Start at the bottom. Row 0 is the foundation chain (ch ${n} in ${nm(Y[0])}); it is not drawn on the chart. Row 1 is the first charted row.`,
       `Read every row from RIGHT to LEFT, the same direction you crochet. Stitch 1 is at the right edge and stitch ${n} is at the left edge; stitch numbers run across the top and bottom.`,
-      `Row numbers are printed on both sides, next to an A or B showing which yarn to use. ${colorTxt}`,
+      `Row numbers are printed on both sides, next to color swatches and labels for every yarn used in that row (for example, A1 + C2 + D). The first color is the row yarn; additional colors are carried strands. ${colorTxt}`,
       'Plain square = sc in back loop only, in the color of that row.', 'X square = dc in front loop of the stitch two rows below, worked in front of the previous row.',
       'BS square = border stitch at each end of the row (sc through both loops). Every row starts and ends with BS.', splitTxt, tip].filter(Boolean).forEach(t => para(t));
     y -= 6; sec(`Example: Row ${ex} (${SHOW === n ? 'all' : 'first ' + SHOW} stitches, right edge)`);
@@ -165,6 +168,16 @@
     ranges.forEach(([r0, r1], pi) => {
       newPage('l'); header(`Chart - Rows ${r0} to ${r1}` + (pi ? ' (continued)' : ''));
       const gw = n * cs, x0 = (LW - gw) / 2, ybot = gridTop - (r1 - r0 + 1) * cs, fs = Math.max(3.2, Math.min(7.5, cs * 0.62));
+      const sw = Math.min(6, cs * .55), gap = 2;
+      const bundleWidth = colors => colors.reduce((sum, e, i) => sum + sw + gap + width(e.label, 'bold', fs) + (i ? width('+', 'bold', fs) + 4 : 0), 0);
+      const maxBundle = Math.max(...Array.from({ length: r1 - r0 + 1 }, (_, i) => bundleWidth(rowColors(r0 + i))));
+      function rowBundle(colors, xx, yy) {
+        colors.forEach((e, i) => {
+          if (i) { ink(DARK); font('bold', fs); text('+', xx + 2, yy + cs * .3); xx += width('+', 'bold', fs) + 4; }
+          fill(e.hex); stroke('#666666'); doc.setLineWidth(.35); rect(xx, yy + (cs - sw) / 2, sw, sw, true, true);
+          ink(DARK); font('bold', fs); text(e.label, xx + sw + gap, yy + cs * .3); xx += sw + gap + width(e.label, 'bold', fs);
+        });
+      }
       ink(GREY); font('normal', 8.5); text(`Part ${pi + 1} of ${ranges.length}. Work bottom up, every row RIGHT to LEFT.` + (pi ? ` Rows ${r0}-${r0 + 1} repeat the top of the previous page (below the teal line).` : ''), 54, LH - 96);
       for (let r = r0; r <= r1; r++) { const yy = ybot + (r - r0) * cs, e = yarnFor(Y, r, rowYarn), ik = lum(rgbOf(e.hex)) < 140 ? '#ffffff' : '#1a1a1a';
         stroke('#555555'); doc.setLineWidth(.3);
@@ -173,9 +186,10 @@
         for (let k = 0; k < n; k++) { const xx = x0 + k * cs, ik = lum(rgbOf(cellHex(k))) < 140 ? '#ffffff' : '#1a1a1a';
           if (k === 0 || k === n - 1) { if (cs >= 6) { ink(ik); font('bold', Math.min(5, cs * 0.42)); text('BS', xx + cs / 2, yy + cs / 2 - cs * 0.15, { align: 'center' }); } else { fill(ik); rect(xx + cs * .35, yy + cs * .35, cs * .3, cs * .3, true); } }
           else if (X[r - 1][k - 1] || (EX.G && (EX.G[r - 1][k - 1] || root.Mosaic.leanAt(EX.G, r - 1, k - 1)))) { stroke(ik); doc.setLineWidth(Math.max(.5, cs / 11)); const p = cs * 0.2; line(xx + p, yy + p, xx + cs - p, yy + cs - p); line(xx + p, yy + cs - p, xx + cs - p, yy + p); } }
-        ink(DARK); font('normal', fs); text(String(r), x0 - 14, yy + cs * .3, { align: 'right' }); text(String(r), x0 + gw + 14, yy + cs * .3);
-        font('bold', fs); text(rowYarn(r), x0 - 6, yy + cs * .3, { align: 'center' }); text(rowYarn(r), x0 + gw + 7, yy + cs * .3, { align: 'center' });
-        if (multiCarry.has(r)) { const s = Math.min(10, cs), xx = x0 + gw + 27, cy = yy + cs / 2;
+        const colors = rowColors(r);
+        ink(DARK); font('normal', fs); text(String(r), x0 - 7, yy + cs * .3, { align: 'right' }); text(String(r), x0 + gw + 7, yy + cs * .3);
+        rowBundle(colors, x0 - 22 - bundleWidth(colors), yy); rowBundle(colors, x0 + gw + 22, yy);
+        if (multiCarry.has(r)) { const s = Math.min(10, cs), xx = x0 + gw + 22 + maxBundle + 6, cy = yy + cs / 2;
           fill('#edf3fa'); stroke('#426b9f'); doc.setLineWidth(.7); rect(xx, cy - s / 2, s, s, true, true);
           ink('#426b9f'); font('bold', Math.max(4, s * .7)); text('2', xx + s / 2, cy - s * .22, { align: 'center' }); }
         if (pi && r === r0 + 1) { stroke(TEAL); doc.setLineWidth(1.5); line(x0 - 30, yy + cs, x0 + gw + 30, yy + cs); } }

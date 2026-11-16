@@ -166,7 +166,7 @@
       const info = document.createElement('div'); info.className = 'small'; info.textContent = `${W} × ${H} · ${p.kind === 'chart' ? 'design' : 'picture'}`;
       const add = document.createElement('button'); add.textContent = 'Add to board'; add.onclick = () => addItem(p);
       const open = document.createElement('button'); open.className = 'sec'; open.textContent = 'Open in Design';
-      open.onclick = () => root.MosaicApp.openDesign(p.rows, pplan(p), p.groups || [], `Opened “${p.name}”. Nothing has been changed.`, p.yarn);
+      open.onclick = () => root.MosaicApp.openDesign(p.rows, pplan(p), p.groups || [], `Opened “${p.name}”. Nothing has been changed.`, p.yarn, p.reference);
       const del = document.createElement('button'); del.className = 'sec'; del.textContent = 'Delete';
       del.onclick = () => { if (!confirm(`Delete "${p.name}"? It will also come off the board.`)) return; st.lib = st.lib.filter(q => q !== p);
         st.board.items = st.board.items.filter(it => it.pid !== p.id); st.sel = -1; saveAll(); drawLib(); draw(); };

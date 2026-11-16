@@ -24,7 +24,7 @@ function app({ canvasFactory } = {}) {
       querySelectorAll: () => [], getContext() { if (!native) return ctx; if (native.width !== this.width) native.width = this.width; if (native.height !== this.height) native.height = this.height; return native.getContext('2d'); }, replaceWith(e) { e.id = this.id; ids.set(this.id, e); },
       append(...args) { this.children.push(...args); }, appendChild(e) { this.children.push(e); },
       setAttribute() {}, insertAdjacentHTML() {}, scrollIntoView() {}, setPointerCapture() {}, showModal() { this.open = true; }, close() { this.open = false; }, focus() {},
-      getBoundingClientRect() { return { top: 0, left: 0, width: this.width, height: this.height }; }, toDataURL: () => native ? native.toDataURL('image/png') : '', click() { this.onclick?.(); }
+      getBoundingClientRect() { return { top: 0, left: 0, width: this.width, height: this.height }; }, toDataURL: () => native ? native.toDataURL('image/png') : 'data:image/png;base64,AAAA', click() { this.onclick?.(); }
     };
   }
   const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
@@ -143,6 +143,52 @@ test('PDF, screen directions and chart use the same overridden yarn; chain stays
   a.click('dlPrev'); a.click('dlChart');
   const out = process.env.MOSAIC_TEST_OUTPUT;
   if (out) { fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'override.pdf'), Buffer.from(doc.output('arraybuffer'))); }
+});
+
+test('PDF chart row keys include every carried color and the current stripe on each page', () => {
+  const a = app(), calls = [], plan = C.defaultPlan(), H = 72, width = 48;
+  plan.A.push({ row: 41, hex: '#123abc' });
+  const strands = [{ k: 1, label: 'C1', hex: '#c8102e', row: 1 }, { k: 1, label: 'C2', hex: '#f6c90e', row: 25 }, { k: 2, label: 'D', hex: '#2e8b57', row: 1 }];
+  const extras = { list: strands, at: (k, r) => strands.filter(e => e.k === k && e.row <= r).at(-1) };
+  const mask = zeros(H, width); for (const r of [3, 36, 37, 40, 41, 50]) { mask[r - 1][0] = 1; mask[r - 1][1] = 2; }
+  const own = r => r === 40 ? 'A' : C.yarnOf(r);
+  const { jsPDF } = require('../site/vendor/jspdf.umd.min.js');
+  a.window.jspdf = { jsPDF: function(opts) { const doc = new jsPDF(opts), original = doc.text.bind(doc);
+    doc.text = (s, x, y, ...args) => { calls.push({ text: String(s), x, y, page: doc.internal.getCurrentPageInfo().pageNumber, color: doc.getTextColor() }); return original(s, x, y, ...args); }; return doc; } };
+  vm.runInContext(fs.readFileSync(path.join(site, 'pdf.js'), 'utf8'), a.context);
+  const doc = a.window.MosaicPDF.build({ X: zeros(H, width), F: zeros(H, width), Y: mask, extras, plan, yarnOf: own, title: 'Row color regression', project: 'chart' });
+  const chartPages = calls.filter(c => c.text.startsWith('Chart - Rows')).map(c => c.page); assert.ok(chartPages.length > 1);
+  const checkedRows = new Map();
+  for (const page of chartPages) {
+    const events = calls.filter(c => c.page === page), nums = events.filter(c => /^\d+$/.test(c.text) && c.x > 396 && ['#222222', '#212121'].includes(c.color));
+    const rightX = Math.max(...nums.map(c => c.x));
+    for (const number of nums.filter(c => Math.abs(c.x - rightX) < .001)) {
+      const r = +number.text, labels = events.filter(c => Math.abs(c.y - number.y) < .001 && c.x > rightX && /^[ABCD]\d*$/.test(c.text)).map(c => c.text);
+      const wanted = [C.labelAt(plan, own(r), r), ...[...new Set(mask[r - 1].filter(Boolean))].sort().map(k => extras.at(k, r).label)];
+      assert.deepEqual(labels, wanted, `row ${r}, page ${page}`); checkedRows.set(r, (checkedRows.get(r) || 0) + 1);
+    }
+  }
+  assert.equal(checkedRows.size, H); assert.ok([...checkedRows.values()].some(n => n > 1), 'overlap rows are checked on both pages');
+  if (process.env.MOSAIC_TEST_OUTPUT) fs.writeFileSync(path.join(process.env.MOSAIC_TEST_OUTPUT, 'row-colors.pdf'), Buffer.from(doc.output('arraybuffer')));
+});
+
+test('Design keeps its original reference through edits, new uploads, saves, and reopening', () => {
+  const a = app(), original = { src: 'data:image/png;base64,AQID', label: 'Original image' };
+  a.st.sourceReference = original;
+  a.st.samp = { idx: [[0, 1], [1, 0]], palette: [[255, 255, 255], [0, 0, 0]], counts: [2, 2] }; a.st.role = ['A', 'B'];
+  a.click('startDesign'); assert.equal(a.ids.get('designReference').hidden, false);
+  assert.equal(a.ids.get('designReferenceImg').src, original.src);
+  a.st.sourceReference = { src: 'data:image/png;base64,BAUG', label: 'Original image' };
+  a.click('dFix'); a.click('dIn'); assert.equal(a.ids.get('designReferenceImg').src, original.src);
+  a.click('saveDesign'); const p = a.window.MosaicCombine._st.lib[0]; assert.deepEqual(plain(p.reference), original);
+  // Exercise the actual saved-piece Open in Design handler.
+  const card = a.ids.get('lib').children.at(-1), button = card.children.at(-1).children.find(e => e.textContent === 'Open in Design');
+  a.open(['AAA', 'BBB', 'AAA']); assert.equal(a.ids.get('designReferenceLabel').textContent, 'Starting design');
+  button.onclick(); assert.equal(a.ids.get('designReferenceImg').src, original.src);
+  // Legacy pieces get a clearly labeled snapshot, never another upload's image.
+  a.window.MosaicApp.openDesign(['AAA', 'BBB', 'AAA'], null, [], 'Legacy piece');
+  assert.equal(a.ids.get('designReferenceLabel').textContent, 'Starting design');
+  assert.notEqual(a.st.d.reference.src, a.st.sourceReference.src);
 });
 
 test('multiple carried strands get row-edge advice, while only stitch errors get red cells', () => {

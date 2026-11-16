@@ -8,7 +8,7 @@
   const M = window.Mosaic, Rn = window.MosaicRender, C = window.MosaicColors, W8 = () => window.MosaicWritten, $ = id => document.getElementById(id);
   const st = {
     // Start
-    img: null, det: null, samp: null, role: [], letterHex: {}, selSw: -1, showLetters: false, bg: 0, scale: 1, mergeMode: false, mergeFrom: null, impHist: [],
+    img: null, sourceReference: null, det: null, samp: null, role: [], letterHex: {}, selSw: -1, showLetters: false, bg: 0, scale: 1, mergeMode: false, mergeFrom: null, impHist: [],
     // Design: P = letters, bottom row first (row 1 = index 0). G = leaning groups, K = keep exactly,
     // mine = squares painted by hand, auto = squares the fixer changed.
     d: null, hist: [], tool: 'B', showX: false, zoom: 1, opts: [],
@@ -29,9 +29,29 @@
   /* ================= Start: read the picture ================= */
   /* Each picture color gets a letter (role) by hand; nothing merges on screen until you ask to see the letters. */
   function imgData(im) { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, c.width, c.height); }
+  function imageReference(im) {
+    const scale = Math.min(1, 256 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(im.naturalWidth * scale)); cv.height = Math.max(1, Math.round(im.naturalHeight * scale));
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0, cv.width, cv.height);
+    return { src: cv.toDataURL('image/png'), label: 'Original image' };
+  }
+  function validReference(ref) {
+    return ref && typeof ref.src === 'string' && ref.src.length <= 1500000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(ref.src)
+      ? { src: ref.src, label: ref.label === 'Original image' ? 'Original image' : 'Starting design' } : null;
+  }
+  function startingReference() {
+    const D = derive(), cv = Rn.drawGrid(D.F, { cell: 1, cellRGB: D.target });
+    return { src: cv.toDataURL('image/png'), label: 'Starting design' };
+  }
+  function renderReference() {
+    const ref = st.d.reference, box = $('designReference'), im = $('designReferenceImg'); box.hidden = !ref;
+    if (!ref) return; if (im.src !== ref.src) im.src = ref.src;
+    im.alt = ref.label + ' for reference'; $('designReferenceLabel').textContent = ref.label;
+  }
   async function loadFile(file) {
     const url = URL.createObjectURL(file), im = new Image(); im.src = url; await im.decode();
-    st.img = imgData(im); st.det = M.detectGrid(st.img); st.samp = st.det.sample();
+    st.sourceReference = imageReference(im);
+    st.img = imgData(im); URL.revokeObjectURL(url); st.det = M.detectGrid(st.img); st.samp = st.det.sample();
     note('detect', `Detected ${st.samp.nx} × ${st.samp.ny} squares (${st.det.mode}), ${st.samp.palette.length} colors. If the count looks wrong, fix it below.`);
     $('nx').value = st.samp.nx; $('ny').value = st.samp.ny; st.letterHex = {}; afterSample();
     note('palNote', st.samp.palette.length > 6 ? `${st.samp.palette.length} colors found. If some look alike, tap Merge look-alikes.` : '');
@@ -126,16 +146,17 @@
     if (st.d && st.hist.length && !confirm('Start a new design from this picture? Your current design will be replaced (save it as a piece in Combine first if you want to keep it).')) return;
     const s = st.scale, rows = [];
     st.samp.idx.forEach(r => { const line = []; r.forEach(v => { for (let k = 0; k < s; k++) line.push(roleOf(v)); }); for (let k = 0; k < s; k++) rows.push(line.slice()); });
-    openDesign(rows, startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Fix</b> when you want them worked out.'); };
-  $('savePic').onclick = () => { if (!st.samp || st.role.some(r => !r)) return; window.MosaicCombine.save({ kind: 'picture', rows: st.samp.idx.map(r => r.map(v => roleOf(v)).join('')), plan: startPlan() }); flash('savePic'); };
+    openDesign(rows, startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Fix</b> when you want them worked out.', null, st.sourceReference); };
+  $('savePic').onclick = () => { if (!st.samp || st.role.some(r => !r)) return; window.MosaicCombine.save({ kind: 'picture', rows: st.samp.idx.map(r => r.map(v => roleOf(v)).join('')), plan: startPlan(), reference: st.sourceReference }); flash('savePic'); };
 
   /* ================= Design ================= */
   /* rows: letter strings or arrays, top row first. groups: [[rowFromTop, col, bits]] */
-  function openDesign(rows, colors, groups, msg, yarn) {
+  function openDesign(rows, colors, groups, msg, yarn, reference) {
     const H = rows.length, W = rows[0].length, P = []; for (let i = H - 1; i >= 0; i--) P.push([...rows[i]]);
     const G = zeros(H, W); (groups || []).forEach(([t, c, b]) => { const i = H - 1 - t; if (i >= 0 && i < H && c >= 0 && c < W) G[i][c] = b; });
     st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: Array.from({ length: H }, (_, i) => yarn && /^[AB]$/.test(yarn[i]) ? yarn[i] : null) }; st.hist = []; st.opts = []; $('optsBox').hidden = true; st.selRow = null;
     st.plan = toPlan(colors);
+    st.d.reference = validReference(reference) || validReference(startingReference());
     const lost = cleanAll(); setView('design'); note('dNote', msg + (lost ? ` ${lost} leaning group${lost > 1 ? 's' : ''} didn't fit and came out.` : '')); $('dNote').dataset.keep = 1; render();
   }
   /* a stored color set: a plan, or one hex per letter (older pieces) */
@@ -197,7 +218,7 @@
     if (msg) { note('dNote', msg); $('dNote').dataset.keep = 1; } render(); }
 
   /* ---------- the editor canvas ---------- */
-  function render() { if (!st.d) return; syncLinked(); const d = st.d, D = derive();
+  function render() { if (!st.d) return; renderReference(); syncLinked(); const d = st.d, D = derive();
     const cell = Math.max(6, Math.min(24, Math.floor(Math.min(620, ($('dWrap').clientWidth || 620) - 4) / Math.max(D.W, 1))));
     const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: D.bad, adviceRows: D.two, mine: d.K, auto: d.auto, groups: d.G });
     if (st.showX) { const g = cv.getContext('2d'), k = cell, p = Math.max(2, k * 0.25); g.lineWidth = Math.max(1, k / 10);
@@ -444,11 +465,11 @@
   function flash(id) { const b = $(id); if (!b.dataset.t) b.dataset.t = b.textContent; b.textContent = 'Saved ✔'; setTimeout(() => { b.textContent = b.dataset.t; }, 1500); }
   $('saveDesign').onclick = () => { if (!st.d) return; const d = st.d, H = d.P.length, groups = [];
     d.G.forEach((row, i) => row.forEach((v, c) => { if (v) groups.push([H - 1 - i, c, v]); }));
-    window.MosaicCombine.save({ kind: 'chart', rows: d.P.slice().reverse().map(r => r.join('')), groups, yarn: (d.yarn || []).slice(), plan: JSON.parse(JSON.stringify(st.plan)) }); flash('saveDesign'); };
+    window.MosaicCombine.save({ kind: 'chart', rows: d.P.slice().reverse().map(r => r.join('')), groups, yarn: (d.yarn || []).slice(), plan: JSON.parse(JSON.stringify(st.plan)), reference: st.d.reference }); flash('saveDesign'); };
   window.MosaicApp = {
     /* the board or a saved piece goes straight into the editor */
-    openDesign: (rows, hex, groups, msg, yarn) => { if (st.d && st.hist.length && !confirm('Open this in Design? Your current design will be replaced (save it as a piece first if you want to keep it).')) return false;
-      openDesign(rows, hex, groups, msg || 'Opened. Nothing has been changed.', yarn); return true; }
+    openDesign: (rows, hex, groups, msg, yarn, reference) => { if (st.d && st.hist.length && !confirm('Open this in Design? Your current design will be replaced (save it as a piece first if you want to keep it).')) return false;
+      openDesign(rows, hex, groups, msg || 'Opened. Nothing has been changed.', yarn, reference); return true; }
   };
   window._mosaicState = st; window._mosaicDerive = () => (st.d ? derive() : null);
   setView('start');

@@ -61,3 +61,5 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .remap{display:inline-flex;align-items:center;gap:3px;margin-right:10px}.remap button{padding:4px 8px;font-size:.78rem}.remap button.on{background:#125765;color:#fff}
 
 .carryAdvice{color:#426b9f}.edLegend .k.carryAdvice{border-color:#426b9f;background:#edf3fa;text-align:center;font:bold 10px/12px sans-serif}
+
+.designHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.designReference{margin:0 0 8px;flex:0 0 auto;width:clamp(72px,18vw,112px);text-align:center}.designReference[hidden]{display:none}.designReference img{display:block;max-width:100%;max-height:112px;margin:0 auto 4px;object-fit:contain;border:1px solid #d4ccc1;border-radius:5px;background:#fff;image-rendering:pixelated}.designReference figcaption{font-size:.72rem}
