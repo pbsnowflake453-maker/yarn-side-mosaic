@@ -17,14 +17,15 @@
       for (let i = 0; i <= H; i++) { g.beginPath(); g.moveTo(0, i * cell + .5); g.lineTo(W * cell, i * cell + .5); g.stroke(); } }
     return cv;
   }
-  /* Leaning-stitch symbols like printed patterns: a straight line down the straight dc and a slanted line from each
-     leaning stitch's top to the same base, two rows down. xc(c) = column center, top(i) = top edge of row i. */
+  /* Leaning-stitch symbols: slanted lines centered in the squares, with X drawn underneath (they are dc stitches).
+     y0/y1 are the vertical centers of the relevant cells. */
   function drawGroups(g, G, xc, top, rh, opts = {}) {
     if (!G) return; const H = G.length, lw = opts.lw || Math.max(1.5, rh / 9);
     for (let i = 1; i < H; i++) for (let b = 0; b < G[i].length; b++) { const v = G[i][b]; if (!v) continue;
-      const y0 = top(i) + rh * 0.12, y1 = top(i) + rh * 1.9, x = xc(b), legs = [[x, y0]];
+      // Center the symbol vertically in the cells: from middle of this row to middle of the row two down
+      const y0 = top(i) + rh * 0.5, y1 = top(i) + rh * 2.5, x = xc(b), legs = [[x, y0]];
       if (v & 1) legs.push([xc(b - 1), y0]); if (v & 2) legs.push([xc(b + 1), y0]);
-      for (const [w, c] of [[lw + 2.5, opts.halo || 'rgba(255,255,255,.9)'], [lw, opts.ink || '#1a1a1a']]) {
+      for (const [w, c] of [[lw + 2.5, opts.halo || 'rgba(255,255,255,.85)'], [lw, opts.ink || '#1a1a1a']]) {
         g.lineWidth = w; g.strokeStyle = c; g.lineCap = 'round';
         for (const [lx, ly] of legs) { g.beginPath(); g.moveTo(lx, ly); g.lineTo(x, y1); g.stroke(); } } }
   }
@@ -81,7 +82,7 @@
         const x = L + k * cell; g.fillStyle = css(fill); g.fillRect(x, y, cell, cell);
         g.strokeStyle = '#999'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, cell, cell);
         if (k === 0 || k === n - 1) { g.fillStyle = ink; g.font = small; g.textAlign = 'center'; g.fillText('BS', x + cell / 2, y + cell / 2); }
-        else if (X[i][k - 1] && !(opts.groups && opts.groups[i][k - 1])) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
+        else if (X[i][k - 1]) { g.strokeStyle = ink; g.lineWidth = Math.max(1.5, cell / 12); const p = cell * 0.22;
           g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + cell - p, y + cell - p); g.moveTo(x + cell - p, y + p); g.lineTo(x + p, y + cell - p); g.stroke(); }
       }
       label(r, y, (rc ? 'B' : 'A') + (opts.carry ? opts.carry(r) : ''));
@@ -95,7 +96,7 @@
     for (let k = 0; k < n; k++) { const num = String(n - k), x = L + k * cell + cell / 2; g.fillText(num, x, top - cell * 0.45); g.fillText(num, x, y0 + cell * 1.45); }
     g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05);
     g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
-      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight one beside it (same stitch 2 rows down).' : ''), L, y0 + cell * 2.55);
+      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line (centered) = a dc leaning into the straight one beside it (same stitch 2 rows down). X shows through.' : ''), L, y0 + cell * 2.55);
     if (legend.length) { let y = y0 + cell * 3.2; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
       for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(L, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(L + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
         g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }

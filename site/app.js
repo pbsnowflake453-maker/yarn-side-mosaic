@@ -145,12 +145,25 @@
   function syncLinked() { const ln = (st.d && st.d.linked) || {};
     for (const L in ln) st.plan[L] = st.plan[ln[L]].map((e, i) => ({ row: i === 0 ? 1 : Math.max(1, e.row - 1), hex: e.hex })); }
   const strandRGB = (k, r) => C.hexToRgb(C.colorOf(st.plan, 'CD'[k - 1], r));
-  /* everything worked out from the letters */
+  /* Prefer C / D as dc (not stacked sc) when the cell is two rows up from a matching stitch with an X in between. */
+  function preferCarriedDc(F, Y) {
+    const H = F.length, W = F[0].length;
+    // first pass: provisional X from current F
+    const prov = M.check(F).X;
+    for (let i = 2; i < H; i++) for (let c = 0; c < W; c++) if (Y[i][c] && !prov[i][c]) {
+      if (prov[i - 1][c] && F[i - 2][c] !== M.color(i - 1)) {
+        // force a mismatch one row below so this C/D becomes the covering dc
+        if (F[i - 1][c] === M.color(i)) F[i - 1][c] = 1 - F[i - 1][c];
+      }
+    }
+    return F;
+  }
   function derive() { const d = st.d, H = d.P.length, W = d.P[0].length, F = zeros(H, W), Y = zeros(H, W);
     d.P.forEach((row, i) => row.forEach((L, c) => { if (L === 'B') F[i][c] = 1; else if (L === 'A') F[i][c] = 0; else { F[i][c] = M.color(i + 1); Y[i][c] = L === 'C' ? 1 : 2; } }));
+    preferCarriedDc(F, Y); // prefer dc for C/D under the two-rows-up + X-in-between rule
     const X = M.check(F).X, pc = M.problemCells(F), bad = pc.bad; let n = pc.n, spots = pc.spots;
-    // a C / D square is an sc in that strand: it can't also be the dc that a square below it needs
-    for (let i = 1; i < H; i++) for (let c = 0; c < W; c++) if (Y[i][c] && X[i][c]) { spots++; for (const q of [i, i - 1]) if (!bad[q][c]) { bad[q][c] = 1; n++; } }
+    // C / D can now be dc (X worked in the carried strand) when the geometry allows; no longer forced to sc
+    // (the old penalty for X on a Y cell is removed so the fixer can choose it when cheaper)
     const vis = (i, c) => { const s = i + 1 < H && X[i + 1][c] ? i + 1 : i; return Y[s][c] ? strandRGB(Y[s][c], s + 1) : rowRGB(s + 1); };
     // your rule: one carried strand per row. Rows with both C and D are flagged (they can still be crocheted)
     const two = []; Y.forEach((row, i) => { if (row.includes(1) && row.includes(2)) two.push(i); });
@@ -160,7 +173,19 @@
   const extras = () => ({ at: (k, r) => ({ label: C.labelAt(st.plan, 'CD'[k - 1], r), hex: C.colorOf(st.plan, 'CD'[k - 1], r) }),
     list: [1, 2].flatMap(k => st.plan['CD'[k - 1]].map((e, i, a) => ({ k, label: a.length > 1 ? 'CD'[k - 1] + (i + 1) : 'CD'[k - 1], hex: e.hex, row: e.row }))) });
   const any = A => A.some(r => r.some(v => v));
-  /* leaning groups must still be possible: straight stitch a dc, neighbors free, nobody in C / D */
+  /* Auto-suggest leaning groups for curves: where a straight X has a free neighbor that can lean in to smooth a diagonal. */
+  function suggestLeans(D) {
+    const G = st.d.G, H = D.H, W = D.W, added = [];
+    for (let i = 1; i < H - 1; i++) for (let b = 1; b < W - 1; b++) if (D.X[i][b] && !G[i][b]) {
+      // try left lean if neighbor free and would help a curve
+      if (!D.X[i][b - 1] && !G[i][b - 1] && M.groupProblem(D.X, G, i, b, 1) === '') {
+        G[i][b] = 1; added.push([i, b, 1]);
+      } else if (!D.X[i][b + 1] && !G[i][b + 1] && M.groupProblem(D.X, G, i, b, 2) === '') {
+        G[i][b] = 2; added.push([i, b, 2]);
+      }
+    }
+    return added.length;
+  }
   function cleanAll() { const d = st.d; if (!any(d.G)) return 0; const D = derive(); let lost = M.cleanGroups(D.X, d.G);
     d.G.forEach((row, i) => row.forEach((v, b) => { if (v && M.groupCols(d.G, i, b).some(c => D.Y[i][c])) { d.G[i][b] = 0; lost++; } })); return lost; }
   const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto) }; };
@@ -179,7 +204,7 @@
         g.strokeStyle = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) < 140 ? '#fff' : '#1a1a1a'; g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + k - p, y + k - p); g.moveTo(x + k - p, y + p); g.lineTo(x + p, y + k - p); g.stroke(); })); }
     replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
     bindPaint(cv, D);
-    $('dUndo').disabled = !st.hist.length; $('dFix').disabled = !D.n;
+    $('dSuggestLeans').onclick = () => { if (!st.d) return; const D = derive(); const n = suggestLeans(D); changed(n ? `Suggested ${n} leaning stitch${n > 1 ? 'es' : ''} for curves.` : 'No new lean suggestions.'); };
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
       ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Fix</b> to change the fewest squares. Your painted squares and Keep squares stay if at all possible.`
@@ -200,6 +225,9 @@
     const hit = (e, first) => { const [r, c] = at(e), key = r + ',' + c; if (key === last || r < 0 || c < 0 || r >= H || c >= D.W) return; last = key; const i = H - 1 - r, t = st.tool;
       if ('ABCD'.includes(t)) { if (d.P[i][c] === t) return; d.P[i][c] = t; d.mine[i][c] = 1; d.auto[i][c] = 0;
         fill(r, c, t === 'C' || t === 'D' ? strandRGB(t === 'C' ? 1 : 2, i + 1) : C.hexToRgb(C.colorOf(st.plan, t, i + 1))); }
+      else if (t === 'cycle') { const order = 'ABCD', cur = d.P[i][c] || 'A', next = order[(order.indexOf(cur) + 1) % 4];
+        d.P[i][c] = next; d.mine[i][c] = 1; d.auto[i][c] = 0;
+        fill(r, c, next === 'C' || next === 'D' ? strandRGB(next === 'C' ? 1 : 2, i + 1) : C.hexToRgb(C.colorOf(st.plan, next, i + 1))); }
       else if (t === 'keep' || t === 'unkeep') { const v = t === 'keep' ? 1 : 0; if (d.K[i][c] === v) return; d.K[i][c] = v; }
       else if (first && t[0] === 'g') groupTap(D, i, c, +t[1]); };
     cv.onpointerdown = e => { e.preventDefault(); down = true; last = ''; cv.setPointerCapture(e.pointerId); before = snap(); hit(e, true); };
@@ -225,7 +253,7 @@
     changed(`<b class="ok">✔ Added</b> ${{ 1: '\\|', 2: '|/', 3: '\\|/' }[bits]} on row ${ci + 1}: the written row says “${{ 1: '2 dc in next st then sk 1', 2: 'sk 1 then 2 dc in next st', 3: 'sk 1 then 3 dc in next st then sk 1' }[bits]}”.`); }
 
   /* tools */
-  const HELP = { A: 'Tap or drag to paint A (background).', B: 'Tap or drag to paint B (contrast).', C: 'Tap or drag to paint C, a strand carried along the row and worked as an sc where it shows.', D: 'Tap or drag to paint D, a second carried strand.',
+  const HELP = { A: 'Tap or drag to paint A (background).', B: 'Tap or drag to paint B (contrast).', C: 'Tap or drag to paint C, a strand carried along the row. Can be sc or dc in that strand when the geometry allows.', D: 'Tap or drag to paint D, a second carried strand. Can be sc or dc when possible.', cycle: 'Tap to cycle the letter: A → B → C → D → A. Good for quick phone edits.' };
     keep: 'Tap or drag over squares that must stay exactly as they are when you tap Fix (teal dots).', unkeep: 'Tap or drag over teal dots to remove them.',
     g1: 'Tap a dc (an X, or the square right under it). The stitch to its left leans into the same stitch two rows down: \\|.', g2: 'Tap a dc. The stitch to its right leans in: |/.', g3: 'Tap a dc. The stitches on both sides lean in: \\|/.', g0: 'Tap a leaning group to take it out.' };
   document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { st.tool = b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b));
