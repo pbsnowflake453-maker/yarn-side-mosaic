@@ -17,6 +17,7 @@
 - PDF chart row keys must show every yarn used in that row with color swatches and current stripe labels, including carried C/D, on both sides and on repeated rows across pages.
 - Design reference thumbnails are frozen when the design starts and saved with the piece. Use the original uploaded image when available; label legacy/combined input snapshots "Starting design" and never show an unrelated later upload.
 - Run `node tests/test_regressions.js` for self-contained engine, UI-handler, save/Combine, and PDF regression checks. Canvas stubs do not replace browser layout testing.
+- Run `node tests/test_pdf_export.js` after PDF submission changes. Optional logo loading/decoding must not block pattern export; keep a text brand fallback and surface actual pattern-generation failures.
 - Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (test_written.js).
 - Defaults: worsted #4, H/5 mm hook, gauge 15 sts x 15 rows = 4".
 

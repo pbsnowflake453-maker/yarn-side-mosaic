@@ -442,22 +442,34 @@
 
   /* ---------- pattern PDF ---------- */
   let logoURL = null;
-  async function getLogo() { if (logoURL) return logoURL; const im = new Image(); im.src = 'logo.png'; await im.decode();
-    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); return (logoURL = c.toDataURL('image/png')); }
+  async function getLogo() {
+    if (logoURL) return logoURL;
+    // jsPDF reads PNG bytes itself. Browser Image.decode() can reject a logo
+    // independently of the pattern, so do not route this asset through Image.
+    const response = await fetch('logo.png', { cache: 'force-cache' });
+    if (!response.ok) throw new Error('The logo could not be loaded.');
+    const bytes = new Uint8Array(await response.arrayBuffer()), signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length > 2000000 || !signature.every((v, i) => bytes[i] === v)) throw new Error('The logo response is not a PNG.');
+    let binary = ''; for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+    return (logoURL = 'data:image/png;base64,' + btoa(binary));
+  }
   $('mkPdf').onclick = () => { if (!st.d) return; const D = derive();
     if (D.n) { note('dNote', `<b class="warn">Fix the ${D.spots} red trouble spot${D.spots > 1 ? 's' : ''} before making the PDF.</b> Tap Fix or paint around them.`); $('dNote').dataset.keep = 1; render(); $('dCv').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     const box = $('pdfColors'); box.innerHTML = '';
     window.MosaicPDF.yarns(st.plan, D.H, ownYarn).forEach(e => { const d = document.createElement('div'); d.className = 'pcol';
       d.innerHTML = `<span class="sw" style="background:${e.hex}"></span><input type="text" data-key="${e.key}" placeholder="${e.label}" maxlength="30">`; box.appendChild(d); });
-    note('pdfNote', ''); $('pdfDlg').showModal(); $('pdfTitle').focus(); };
+    $('pdfBorderWrap').hidden = $('pdfProject').value === 'chart';
+    note('pdfNote', ''); $('pdfDlg').showModal(); $('pdfTitle').focus({ preventScroll: true }); $('pdfDlg').scrollTop = 0; };
   $('pdfProject').onchange = () => { $('pdfBorderWrap').hidden = $('pdfProject').value === 'chart'; };
   $('pdfCancel').onclick = () => $('pdfDlg').close();
   $('pdfForm').onsubmit = async ev => { ev.preventDefault(); const title = $('pdfTitle').value.trim(); if (!title) return note('pdfNote', 'Please type a title.');
     note('pdfNote', 'Making PDF…');
     try { const D = derive(), names = {}; document.querySelectorAll('#pdfColors input').forEach(i => names[i.dataset.key] = i.value);
       const pv = Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), noLabel: true, bad: D.bad, adviceRows: D.two });
+      let logo = null;
+      try { logo = await getLogo(); } catch (e) { console.warn('Using the text brand mark because the logo could not be loaded.', e); }
       const doc = window.MosaicPDF.build({ X: D.X, F: D.F, plan: st.plan, ...dirOpts(D), title, names, notes: $('pdfNotes').value, ideas: $('pdfIdeas').value, project: $('pdfProject').value, border: $('pdfBorder').value,
-        logo: await getLogo(), preview: pv.toDataURL('image/png'), previewW: pv.width, previewH: pv.height });
+        logo, preview: pv.toDataURL('image/png'), previewW: pv.width, previewH: pv.height });
       doc.save(window.MosaicPDF.fileName(title)); $('pdfDlg').close(); }
     catch (e) { console.error(e); note('pdfNote', 'Something went wrong: ' + e.message); } };
 

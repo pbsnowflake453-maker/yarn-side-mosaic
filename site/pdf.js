@@ -41,7 +41,17 @@
     const wrap = (s, st, sz, w) => { font(st, sz); return doc.splitTextToSize(clean(s), w); };
     const rect = (x, yy, w, h, f, s) => doc.rect(x, T(yy + h), w, h, f && s ? 'FD' : f ? 'F' : 'S');
     const line = (x1, y1, x2, y2) => doc.line(x1, T(y1), x2, T(y2));
-    const logo = (x, yy, w) => o.logo && doc.addImage(o.logo, 'PNG', x, T(yy + w / LOGO_AR), w, w / LOGO_AR);
+    let brandLogo = o.logo;
+    const logo = (x, yy, w) => {
+      if (brandLogo) {
+        try { doc.addImage(brandLogo, 'PNG', x, T(yy + w / LOGO_AR), w, w / LOGO_AR); return; }
+        catch (e) { brandLogo = null; }
+      }
+      // Branding remains present even when an optional image asset is missing
+      // or damaged. Never discard the crochet pattern over a logo failure.
+      ink(TEAL); font('bold', Math.max(10, Math.min(26, w * .11)));
+      text('The Yarn Side', x + w / 2, yy + w / LOGO_AR * .38, { align: 'center' });
+    };
     const footTxt = `\u00a9 The Yarn Side  \u00b7  ${title} Overlay Mosaic Pattern  \u00b7  For personal use only`;
     function footer() { page++; stroke(TEAL); doc.setLineWidth(1); line(54, 40, PW - 54, 40); font('normal', 8); ink(GREY); text(footTxt, 54, 28); text('Page ' + page, PW - 54, 28, { align: 'right' }); }
     function header(t) { logo(PW - 54 - 120, PH - 72, 120); ink(GREY); font('bold', 8.5); text(`${title.toUpperCase()}  \u00b7  OVERLAY MOSAIC PATTERN`, 54, PH - 40, { maxWidth: PW - 108 - 135 });
