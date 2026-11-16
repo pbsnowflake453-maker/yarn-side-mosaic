@@ -20,12 +20,11 @@
   const hexAt = (plan, r) => colorOf(plan, yarnOf(r), r);
   /* label used in patterns: A, or A1 / A2 / ... when A changes color */
   function labelAt(plan, L, r) { const list = fullPlan(plan)[L]; if (list.length < 2) return L; let k = 0; list.forEach((e, i) => { if (e.row <= r) k = i; }); return L + (k + 1); }
-  /* from row r upward, letter L (default: row r's own yarn) becomes hex. A / B changes sit on rows of that yarn. */
+  /* From the exact selected row upward, letter L becomes hex, including overridden A/B rows. */
   function addChange(plan, X, r, hex, L) {
     plan = fullPlan(plan); L = L || yarnOf(r);
-    if ((L === 'A' || L === 'B') && yarnOf(r) !== L) r++;          // an A change goes on an A row, B on a B row
     const list = plan[L].map(e => ({ ...e })), first = list[0].row;
-    if (r <= first) list[0].hex = hex; else { const i = list.findIndex(e => e.row === r); if (i >= 0) list[i].hex = hex; else list.push({ row: r, hex }); }
+    if (r <= first) { list[0].row = r; list[0].hex = hex; } else { const i = list.findIndex(e => e.row === r); if (i >= 0) list[i].hex = hex; else list.push({ row: r, hex }); }
     list.sort((a, b) => a.row - b.row);
     const dedup = list.filter((e, i) => i === 0 || e.hex !== list[i - 1].hex);   // drop no-op changes
     return { plan: { ...plan, [L]: dedup }, note: '' };
@@ -33,14 +32,31 @@
   /* a plan from per-row colors: rows = { A: {row: hex}, ... }; rows without an entry keep the color below them */
   function planFromRows(rows, H, fallback) { const plan = fullPlan(fallback);
     for (const L of ['A', 'B', 'C', 'D']) { const m = rows[L] || {}, keys = Object.keys(m).map(Number).sort((a, b) => a - b); if (!keys.length) continue;
-      const first = L === 'B' ? 2 : 1, list = [{ row: first, hex: m[keys[0]] }];
+      const first = L === 'B' ? Math.min(2, keys[0]) : 1, list = [{ row: first, hex: m[keys[0]] }];
       for (const k of keys) if (m[k] !== list[list.length - 1].hex) list.push({ row: Math.max(first, k), hex: m[k] });
       plan[L] = list; }
     return plan; }
-  function legend(plan, H) {
+  function formatRows(rows) {
+    const out = [];
+    for (let i = 0; i < rows.length;) {
+      const step = rows[i + 1] - rows[i]; let j = i;
+      if (step === 1 || step === 2) while (j + 1 < rows.length && rows[j + 1] === rows[j] + step) j++;
+      if (j === i || (step === 2 && j - i < 2)) { out.push(String(rows[i++])); continue; }
+      out.push(`${rows[i]}-${rows[j]}${step === 2 ? (rows[i] % 2 ? ' (odd)' : ' (even)') : ''}`); i = j + 1;
+    }
+    return out.join(', ');
+  }
+  function legend(plan, H, rowYarn = yarnOf) {
     const out = []; plan = fullPlan(plan);
-    for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const nx = plan[y][i + 1]; let to = nx ? nx.row - 2 : H; if (yarnOf(to) !== y) to--; out.push({ yarn: y, hex: e.hex, rgb: hexToRgb(e.hex), from: e.row, to }); });
+    for (const y of ['A', 'B']) plan[y].forEach((e, i) => {
+      const rows = [];
+      for (let r = 1; r <= H; r++) if (rowYarn(r) === y && labelAt(plan, y, r) === (plan[y].length > 1 ? y + (i + 1) : y)) rows.push(r);
+      if (!rows.length && !(y === 'A' && i === 0)) return;
+      const range = rows.length ? (formatRows(rows)) : 'chain only';
+      out.push({ yarn: y, idx: i, hex: e.hex, rgb: hexToRgb(e.hex), from: e.row, to: rows.length ? rows[rows.length - 1] : 0, rows,
+        text: `${e.hex.toUpperCase()} · ${plan[y].length > 1 ? y + (i + 1) : y}: ${rows.length ? 'rows ' : ''}${range}` });
+    });
     return out;
   }
-  root.MosaicColors = { STARTERS, loadBank, saveBank, validHex, normHex, hexToRgb, defaultPlan, fullPlan, colorOf, labelAt, hexAt, addChange, planFromRows, legend, yarnOf };
+  root.MosaicColors = { STARTERS, loadBank, saveBank, validHex, normHex, hexToRgb, defaultPlan, fullPlan, colorOf, labelAt, hexAt, addChange, planFromRows, legend, formatRows, yarnOf };
 })(typeof window !== 'undefined' ? window : globalThis);

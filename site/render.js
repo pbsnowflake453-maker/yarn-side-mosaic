@@ -65,7 +65,7 @@
     const inkFor = c => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < 140 ? '#fff' : '#000');
     cv._geo = { top, cell, H, stripX: 2, stripW: SW };
     for (let r = 0; r <= H; r++) { const y = top + (H - r) * cell; // yarn strip (row 0 = chain, A yarn of row 1)
-      g.fillStyle = css(rowRGB(r === 0 ? 1 : r)); g.fillRect(2, y + 1, SW - 4, cell - 2); g.strokeStyle = '#888'; g.strokeRect(2.5, y + 1.5, SW - 5, cell - 3);
+      g.fillStyle = css(r === 0 ? (opts.chainRGB || rowRGB(1)) : rowRGB(r)); g.fillRect(2, y + 1, SW - 4, cell - 2); g.strokeStyle = '#888'; g.strokeRect(2.5, y + 1.5, SW - 5, cell - 3);
       if (opts.selRow === r) { g.strokeStyle = '#c8102e'; g.lineWidth = 3; g.strokeRect(1.5, y + .5, SW - 3, cell - 1); g.lineWidth = 1; } }
     const small = `${Math.round(cell * 0.42)}px sans-serif`, bold = `bold ${Math.round(cell * 0.55)}px sans-serif`;
     g.textBaseline = 'middle';
@@ -106,7 +106,7 @@
 
   function drawPreview(X, opts = {}) {
     const H = X.length, W = X[0].length, n = W + 2, cw = opts.cw || 28, rh = opts.rh || 25, pad = 30;
-    const Fab = simulate(X), cv = mk(n * cw + 2 * pad, (H + 1) * rh + 2 * pad), g = cv.getContext('2d');
+    const cv = mk(n * cw + 2 * pad, (H + 1) * rh + 2 * pad), g = cv.getContext('2d');
     let s = 7; const R = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
     const yarn = [opts.a || [238, 232, 220], opts.b || [34, 34, 38]], rowRGB = opts.rowRGB || (r => yarn[color(r)]), sh = (c, f) => css(c.map(v => Math.max(0, Math.min(255, v * f))));
     g.fillStyle = '#cdc4b6'; g.fillRect(0, 0, cv.width, cv.height);
@@ -126,7 +126,7 @@
     const stitch = (i, col) => (opts.stitchRGB && col >= 0 && col < W && opts.stitchRGB(i, col)) || (opts.rowRGB ? opts.rowRGB(i + 1) : yarn[color(i + 1)]);
     for (let i = 0; i < H; i++) for (let k = 0; k < n; k++) { const col = k - 1, cov = col >= 0 && col < W && i + 1 < H && X[i + 1][col];
       g.fillStyle = sh(cov ? stitch(i + 1, col) : stitch(i, col), .55); g.fillRect(X0(k), Y0(i), cw, rh); }
-    for (let k = 0; k < n; k++) loop(X0(k) + 2, pad + H * rh + 4, cw - 4, rh - 8, rowRGB(1));
+    for (let k = 0; k < n; k++) loop(X0(k) + 2, pad + H * rh + 4, cw - 4, rh - 8, opts.chainRGB || rowRGB(1));
     for (let i = 0; i < H; i++) {
       const c = rowRGB(i + 1);
       const lean = col => (opts.lean && col >= 0 && col < W ? opts.lean(i, col) : 0), leaning = [];
