@@ -363,15 +363,15 @@
     const L = st.stripeFor === 'row' ? C.yarnOf(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
     note('colorNote', res.note || `From row ${st.selRow} up, ${L === 'C' || L === 'D' ? 'carried strand ' + L : 'the ' + L + ' yarn'} is ${hex}.`); }
   document.querySelectorAll('[data-stripe]').forEach(b => b.onclick = () => { st.stripeFor = b.dataset.stripe; document.querySelectorAll('[data-stripe]').forEach(x => x.classList.toggle('on', x === b)); });
-  /* Swap letters from selected row upward so the fixer sees the new role (A→C etc.). */
+  /* Swap letters on the selected row only (row by row) so the fixer sees the new role. */
   document.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => {
     if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
-    const to = b.dataset.swap, from = C.yarnOf(st.selRow), d = st.d, H = d.P.length;
+    const to = b.dataset.swap, from = C.yarnOf(st.selRow), d = st.d, i = st.selRow - 1;
     if (from === to) return note('colorNote', `Row ${st.selRow} is already ${from}.`);
     push(); let n = 0;
-    for (let i = st.selRow - 1; i < H; i++) for (let c = 0; c < d.P[i].length; c++) if (d.P[i][c] === from) { d.P[i][c] = to; d.mine[i][c] = 1; n++; }
-    changed(`From row ${st.selRow} up, ${n} ${from} square${n === 1 ? '' : 's'} became ${to}. The fixer sees them as ${to} now.`);
-    note('colorNote', `Swapped ${from} → ${to} from row ${st.selRow} up (${n} squares).`);
+    for (let c = 0; c < d.P[i].length; c++) if (d.P[i][c] === from) { d.P[i][c] = to; d.mine[i][c] = 1; n++; }
+    changed(`On row ${st.selRow}, ${n} ${from} square${n === 1 ? '' : 's'} became ${to}. The fixer sees them as ${to} now.`);
+    note('colorNote', `Swapped ${from} → ${to} on row ${st.selRow} only (${n} squares).`);
   });
   function drawBank() { const box = $('bank'); box.innerHTML = '';
     st.bank.forEach(hex => { const d = document.createElement('div'); d.className = 'bank-sw'; d.style.background = hex; d.title = hex; d.onclick = () => pick(hex);
