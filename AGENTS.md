@@ -11,6 +11,7 @@
 - Overlay mosaic, worked flat, RS rows only; row 0 = foundation chain (A). Odd rows = color A (background), even rows = color B.
 - Row yarn defaults can be overridden in `d.yarn` (bottom-up, row 1 at index 0). Preserve that schedule in saved pieces, Combine, Fix options, chart/preview rendering, and PDF/written exports. The foundation chain always stays A.
 - Carried C/D dc may cover the same carried letter and hex color below it, with no stacked dc. Derivation must never modify the requested picture to force a dc.
+- Lean groups are conservatively supported from row 3 onward with a same-color shared anchor two chart rows below. Validate actual colors with `groupProblem` context, including carried strands and stripes. Suggest only stepped corners, not arbitrary free neighbors; never certify the whole shaped fabric from the binary grid alone.
 - A cell showing the opposite of its row color is a mismatch and needs an X (dc worked 2 rows down) directly above. Workable only if no two vertically adjacent mismatches in a column, none in the top row, and the covering stitch actually uses the requested yarn; the fixer edits the minimum pixels to comply.
 - Run `node tests/test_regressions.js` for self-contained engine, UI-handler, save/Combine, and PDF regression checks. Canvas stubs do not replace browser layout testing.
 - Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (test_written.js).

@@ -163,11 +163,21 @@
   const extras = () => ({ at: (k, r) => ({ label: C.labelAt(st.plan, 'CD'[k - 1], r), hex: C.colorOf(st.plan, 'CD'[k - 1], r) }),
     list: [1, 2].flatMap(k => st.plan['CD'[k - 1]].map((e, i, a) => ({ k, label: a.length > 1 ? 'CD'[k - 1] + (i + 1) : 'CD'[k - 1], hex: e.hex, row: e.row }))) });
   const any = A => A.some(r => r.some(v => v));
+  const leanOpts = D => ({ colorAt: (i, c) => D.target(i, c).join(','), yarnAt: i => rowRGB(i + 1).join(',') });
   /* Auto-suggest leaning groups for curves: where a straight X has a free neighbor that can lean in to smooth a diagonal. */
   function suggestLeans(D) {
     const G = st.d.G, H = D.H, W = D.W, added = [];
-    const canLean = (i, b, bits) => M.groupProblem(D.X, G, i, b, bits) === '' && [b, b + (bits === 1 ? -1 : 1)].every(c => !D.Y[i][c] && !D.bad[i][c]);
-    for (let i = 1; i < H - 1; i++) for (let b = 1; b < W - 1; b++) if (D.X[i][b] && !G[i][b]) {
+    const context = leanOpts(D);
+    const canLean = (i, b, bits) => {
+      const wing = b + (bits === 1 ? -1 : 1), own = context.yarnAt(i);
+      // Suggest only an actual corner: a same-color vertical stem, with a
+      // contrasting block under the new wing. A free neighbor is not a curve.
+      return M.groupProblem(D.X, G, i, b, bits, context) === ''
+        && [b, wing].every(c => !D.Y[i][c] && !D.bad[i][c])
+        && context.colorAt(i - 2, wing) !== own
+        && context.colorAt(i - 1, wing) === context.colorAt(i - 2, wing);
+    };
+    for (let i = 2; i < H; i++) for (let b = 1; b < W - 1; b++) if (D.X[i][b] && !G[i][b]) {
       // try left lean if neighbor free and would help a curve
       if (!D.X[i][b - 1] && !G[i][b - 1] && canLean(i, b, 1)) {
         G[i][b] = 1; added.push([i, b, 1]);
@@ -177,7 +187,7 @@
     }
     return added.length;
   }
-  function cleanAll() { const d = st.d; if (!any(d.G)) return 0; const D = derive(); let lost = M.cleanGroups(D.X, d.G);
+  function cleanAll() { const d = st.d; if (!any(d.G)) return 0; const D = derive(); let lost = M.cleanGroups(D.X, d.G, leanOpts(D));
     d.G.forEach((row, i) => row.forEach((v, b) => { if (v && M.groupCols(d.G, i, b).some(c => D.Y[i][c])) { d.G[i][b] = 0; lost++; } })); return lost; }
   const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto), yarn: (d.yarn || []).slice(), linked: { ...d.linked }, plan: JSON.parse(JSON.stringify(st.plan)) }; };
   function restore(h) { const { plan, ...design } = h; Object.assign(st.d, design); if (plan) st.plan = plan; }
@@ -197,13 +207,13 @@
         g.strokeStyle = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) < 140 ? '#fff' : '#1a1a1a'; g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + k - p, y + k - p); g.moveTo(x + k - p, y + p); g.lineTo(x + p, y + k - p); g.stroke(); })); }
     replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
     bindPaint(cv, D);
-    $('dSuggestLeans').onclick = () => { if (!st.d) return; const D = derive(), before = snap(), n = suggestLeans(D); if (n) push(before); changed(n ? `Suggested ${n} leaning stitch${n > 1 ? 'es' : ''} for curves.` : 'No new lean suggestions.'); };
+    $('dSuggestLeans').onclick = () => { if (!st.d) return; const D = derive(), before = snap(), n = suggestLeans(D); if (n) push(before); changed(n ? `Suggested ${n} leaning stitch${n > 1 ? 'es' : ''} for curves.` : 'No supported corner shapes found for new leans.'); };
     $('dUndo').disabled = !st.hist.length; $('dFix').disabled = !D.n;
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
       ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Fix</b> to change the fewest squares. Your painted squares and Keep squares stay if at all possible.`
         + (D.bad[D.H - 1].some(v => v) ? ' <br>The top row has squares that can\'t be covered (nothing above them). Adding a row at the top, or changing those squares to the row\'s yarn, usually clears this.' : '')
-      : '<b class="ok">✔ Workable.</b> Every square can be crocheted as shown.')
+      : (any(d.G) ? '<b class="ok">✔ Base chart is workable.</b> Diagonal stitches reshape the pixel edges; review the written groups before crocheting.' : '<b class="ok">✔ Workable.</b> Every square can be crocheted as shown.'))
       );
     else $('dNote').querySelectorAll('.flag').forEach(e => e.remove());
     // your rule: one carried strand per row (shown even after another message)
@@ -235,12 +245,16 @@
   const WHY = { center: "That square isn't part of a dc. Turn on Show X's and tap an X (or the square right under it).",
     edge: s => `There's no stitch to its ${s} (edge of the design).`, dc: s => `The stitch to its ${s} is a dc going straight down, so it can't lean.`,
     above: s => `The stitch to its ${s} has a dc right above it, which would land on the leaning stitch.`, taken: s => `The stitch to its ${s} already leans into another group.`,
+    foundation: 'This tool needs two complete chart rows below a leaning group. Add foundation rows first.',
+    anchor: 'The shared base two rows down is a different color. Cross-color leaning groups are not supported.',
+    path: 'The straight leg would cross a different color in the design.',
+    yarn: s => `The stitch to its ${s} uses a different color from the group.`,
     strand: 'Leaning stitches are worked in the row\'s own yarn, so none of them can be a C / D square.' };
   function groupTap(D, i, c, bits) { const d = st.d, H = D.H, warn = t => { note('dNote', t); $('dNote').dataset.keep = 1; render(); };
     if (!bits) { const gp = groupOf(i, c) || (i + 1 < H && groupOf(i + 1, c)); if (!gp) return warn('No leaning group there.');
       push(); d.G[gp.i][gp.b] = 0; return changed(`Took out the leaning group on row ${gp.i + 1}.`); }
     const ci = D.X[i][c] ? i : i + 1 < H && D.X[i + 1][c] ? i + 1 : -1; if (ci < 0) return warn(WHY.center);
-    const old = d.G[ci][c]; d.G[ci][c] = 0; const why = M.groupProblem(D.X, d.G, ci, c, bits); d.G[ci][c] = old;
+    const old = d.G[ci][c]; d.G[ci][c] = 0; const why = M.groupProblem(D.X, d.G, ci, c, bits, leanOpts(D)); d.G[ci][c] = old;
     if (why) { const [k, side] = why.split(':'); return warn(`<b class="warn">Can't lean there.</b> ` + (side ? WHY[k](side) : WHY[k])); }
     const cols = [c].concat(bits & 1 ? [c - 1] : [], bits & 2 ? [c + 1] : []); if (cols.some(q => D.Y[ci][q])) return warn(`<b class="warn">Can't lean there.</b> ${WHY.strand}`);
     push(); d.G[ci][c] = bits;

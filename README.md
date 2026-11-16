@@ -22,7 +22,7 @@ tests/           Node/Playwright test scripts
 
 ## Build / test
 
-- Self-contained regression suite: `node tests/test_regressions.js` (no install or external image fixtures). Covers carried dc, custom row yarns, Fix, Undo, saved pieces/Combine, stripes, PDF yarn labels, and generated-chart round trips. Set `MOSAIC_TEST_OUTPUT=/tmp/mosaic-tests` to keep the sample PDF for visual checks.
+- Self-contained regression suite: `node tests/test_regressions.js` (no install or external image fixtures). Covers carried dc, custom row yarns, conservative lean-anchor/corner checks, Fix, Undo, saved pieces/Combine, stripes, PDF yarn labels, and generated-chart round trips. Set `MOSAIC_TEST_OUTPUT=/tmp/mosaic-tests` to keep the sample PDF for visual checks.
 - Serve: `cd site && python3 -m http.server 8813` and open it.
 - Tests: `npm i playwright` then e.g. `node tests/test.js`, `node tests/test_written.js`, `node tests/test_pdf.js` (paths in the scripts may point at the original box; adjust). Render the PDF with `pdftoppm` and check it visually.
 - Deploy: zip the **contents** of `site/` and drop on Netlify. **Ask Samantha before publishing changes.**

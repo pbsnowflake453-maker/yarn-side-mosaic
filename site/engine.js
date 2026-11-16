@@ -271,19 +271,28 @@
   function leanAt(G, i, c) { const W = G[0].length;
     if (c + 1 < W && G[i][c + 1] & 1) return 1; if (c - 1 >= 0 && G[i][c - 1] & 2) return -1; return 0; }
   /* '' if the group is possible, otherwise why not (side = 'left' / 'right') */
-  function groupProblem(X, G, i, b, bits) {
+  function groupProblem(X, G, i, b, bits, opts = {}) {
     const H = X.length, W = X[0].length;
+    if (i < 2) return 'foundation';
     if (!X[i][b]) return 'center';
+    // An X alone does not establish a suitable anchor: a carried strand or
+    // stripe may occupy the shared base two rows down. This tool supports
+    // same-color anchors only, rather than guessing at cross-color shaping.
+    const at = opts.colorAt || ((r, c) => r + 1 < H && X[r + 1][c] ? color(r + 2) : color(r + 1));
+    const yarn = opts.yarnAt ? opts.yarnAt(i) : color(i + 1);
+    if (at(i - 2, b) !== yarn) return 'anchor';
+    if (at(i, b) !== yarn || at(i - 1, b) !== yarn) return 'path';
     for (const [bit, nb, side] of [[1, b - 1, 'left'], [2, b + 1, 'right']]) { if (!(bits & bit)) continue;
       if (nb < 0 || nb >= W) return 'edge:' + side;
+      if (at(i, nb) !== yarn) return 'yarn:' + side;
       if (X[i][nb] || G[i][nb]) return 'dc:' + side;
       if (i + 1 < H && X[i + 1][nb]) return 'above:' + side;
       if ((nb - 1 >= 0 && nb - 1 !== b && G[i][nb - 1] & 2) || (nb + 1 < W && nb + 1 !== b && G[i][nb + 1] & 1)) return 'taken:' + side; }
     return '';
   }
   /* drop groups that stopped being possible (after the chart changed); returns how many were dropped */
-  function cleanGroups(X, G) { let n = 0;
-    G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v)) n++; else G[i][b] = v; }));
+  function cleanGroups(X, G, opts) { let n = 0;
+    G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v, opts)) n++; else G[i][b] = v; }));
     return n; }
 
   /* Fix a design in place: fewest changes, keeping locked squares (hand-painted, keep exactly) if at all possible.

@@ -58,10 +58,37 @@ test('row overrides validate actual covering yarn, and Fix clears all trouble', 
 });
 
 test('Suggest leans is undoable, and a no-op suggestion does not add history', () => {
-  const a = app(); a.open(['AAA', 'BAB', 'AAA', 'BBB']); a.click('dSuggestLeans');
+  const a = app(); a.open(['BAB', 'BAB', 'AAA', 'BBB']); a.click('dSuggestLeans');
   assert.ok(a.st.d.G.flat().some(Boolean)); assert.equal(a.ids.get('dUndo').disabled, false);
   a.click('dUndo'); assert.ok(!a.st.d.G.flat().some(Boolean));
   a.open(['AAA', 'BBB', 'AAA']); a.click('dSuggestLeans'); assert.equal(a.st.hist.length, 0);
+});
+
+test('lean suggestions require a real corner and manual groups require a matching shared anchor', () => {
+  const a = app();
+  // A straight dc beside a free square, but only a stripe underneath: no curve.
+  a.open(['AAA', 'BAB', 'AAA', 'BBB']); a.click('dSuggestLeans');
+  assert.ok(!a.st.d.G.flat().some(Boolean));
+  // The straight dc is valid, but its shared anchor is a C-colored square.
+  a.open(['ACA', 'BAB', 'AAA']); assert.equal(a.derive().n, 0);
+  a.click('dSuggestLeans'); assert.ok(!a.st.d.G.flat().some(Boolean));
+  const D = a.derive(), context = { colorAt: (i, c) => D.target(i, c).join(','), yarnAt: () => '255,255,255' };
+  assert.equal(M.groupProblem(plain(D.X), zeros(3, 3), 2, 1, 1, context), 'anchor');
+  // Reopening an older piece must remove unsupported groups without altering pixels.
+  const original = plain(a.st.d.P);
+  a.window.MosaicApp.openDesign(['AAA', 'BAB', 'ACA'], null, [[0, 1, 1]], 'Saved chart');
+  assert.deepEqual(plain(a.st.d.P), original); assert.ok(!a.st.d.G.flat().some(Boolean));
+  // A genuine stepped A/B boundary still supports 2 dc in one base loop.
+  a.open(['BAB', 'BAB', 'AAA']); a.click('dSuggestLeans');
+  assert.equal(a.st.d.G[2][1], 1);
+  const line = a.window.MosaicWritten.directions(a.derive().X, a.st.plan, { G: a.st.d.G }).split('\n').find(l => l.startsWith('Row 3'));
+  assert.match(line, /2 dc in next st then sk 1/);
+  assert.equal(Written.parseRow(line).width, 3);
+  // The other direction and both wings share the same validated anchor.
+  const x = plain(a.derive().X), empty = zeros(3, 3);
+  assert.equal(M.groupProblem(x, empty, 2, 1, 2), '');
+  assert.equal(M.groupProblem(x, empty, 2, 1, 3), '');
+  assert.equal(M.groupProblem([[0, 0], [1, 0]], zeros(2, 2), 1, 0, 2), 'foundation');
 });
 
 test('saved pieces reopen with their working yarns and survive Combine', () => {
