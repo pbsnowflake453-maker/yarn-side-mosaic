@@ -25,6 +25,7 @@
   function build(o) {
     const rowYarn = o.yarnOf || C().yarnOf;
     const { X, plan } = o, EX = Object.assign({ yarnOf: rowYarn }, o.Y && o.Y.some(row => row.some(v => v)) ? { Y: o.Y, extras: o.extras } : {}, o.G && o.G.some(row => row.some(v => v)) ? { G: o.G } : {}), H = X.length, Wd = X[0].length, n = Wd + 2;
+    const multiCarry = new Set(EX.Y ? EX.Y.flatMap((row, i) => row.includes(1) && row.includes(2) ? [i + 1] : []) : []);
     const title = clean(o.title).trim(), names = o.names || {}, Y = yarns(plan, H, rowYarn);
     const nm = e => { const v = clean(names[e.key] || '').trim(); return v ? `${e.label} - ${v}` : e.label; };
     const doc = new root.jspdf.jsPDF({ unit: 'pt', format: 'letter', compress: true });
@@ -102,7 +103,7 @@
     para('There are lots of video tutorials online that will help explain the overlay mosaic process. Try searching "overlay mosaic crochet tutorial" on YouTube.', 64, 10.5, false); footer(); });
 
     // chart pagination (needed for the read-the-chart page)
-    const LW = 792, LH = 612, cs = Math.min(12, (LW - 108 - 80) / n), gridTop = LH - 118, keyRows = Math.ceil((Y.length + 2) / 4), gridBot = 70 + 30 + keyRows * 16;
+    const LW = 792, LH = 612, cs = Math.min(12, (LW - 108 - 80) / n), gridTop = LH - 118, keyRows = Math.ceil((Y.length + 2 + (multiCarry.size ? 1 : 0)) / 4), gridBot = 70 + 30 + keyRows * 16;
     const per = Math.max(6, Math.floor((gridTop - gridBot) / cs)), ranges = chartRanges(H, per);
 
     // ---------- 3. How to read the chart ----------
@@ -138,6 +139,7 @@
     para(`Written: Row ${ex} (${nm(exY)}): ${shortBody} The X squares are the dc stitches; the plain squares are the sc stitches.`, 54, 10.5, false);
     y -= 6; sec('Chart key'); Y.forEach(e => swatch(e.hex, yarnLine(e)));
     if (EX.Y) Wr().strandList(EX.extras).forEach(e => { if (EX.Y.some(row => row.includes(e.k))) swatch(e.hex, `Color ${e.label} (carried strand): squares shaded this color are worked with ${e.label}. The written rows show them as [${e.label}: …].`); });
+    if (multiCarry.size) para('A blue 2 at the row edge means both C and D are carried on that row. This is a preference notice, not a stitch error.');
     swatch(Y[0].hex, 'X = dc in front 2 rows down', 'X'); swatch(Y[0].hex, 'BS = border stitch', 'BS');
     if (EX.G) { const has = b => EX.G.some(row => row.includes(b));
       if (has(1)) swatch(Y[0].hex, '2 dc in next st then sk 1: the straight dc and the one to its left go into the same stitch 2 rows below.', 1);
@@ -173,6 +175,9 @@
           else if (X[r - 1][k - 1] || (EX.G && (EX.G[r - 1][k - 1] || root.Mosaic.leanAt(EX.G, r - 1, k - 1)))) { stroke(ik); doc.setLineWidth(Math.max(.5, cs / 11)); const p = cs * 0.2; line(xx + p, yy + p, xx + cs - p, yy + cs - p); line(xx + p, yy + cs - p, xx + cs - p, yy + p); } }
         ink(DARK); font('normal', fs); text(String(r), x0 - 14, yy + cs * .3, { align: 'right' }); text(String(r), x0 + gw + 14, yy + cs * .3);
         font('bold', fs); text(rowYarn(r), x0 - 6, yy + cs * .3, { align: 'center' }); text(rowYarn(r), x0 + gw + 7, yy + cs * .3, { align: 'center' });
+        if (multiCarry.has(r)) { const s = Math.min(10, cs), xx = x0 + gw + 27, cy = yy + cs / 2;
+          fill('#edf3fa'); stroke('#426b9f'); doc.setLineWidth(.7); rect(xx, cy - s / 2, s, s, true, true);
+          ink('#426b9f'); font('bold', Math.max(4, s * .7)); text('2', xx + s / 2, cy - s * .22, { align: 'center' }); }
         if (pi && r === r0 + 1) { stroke(TEAL); doc.setLineWidth(1.5); line(x0 - 30, yy + cs, x0 + gw + 30, yy + cs); } }
       if (EX.G) for (let r = Math.max(2, r0); r <= r1; r++) EX.G[r - 1].forEach((v, b) => { if (!v) return;
         const xc = c => x0 + (c + 1) * cs + cs / 2, yy = ybot + (r - r0) * cs, yT = yy + cs * 0.88, yB = r - 1 >= r0 ? yy - cs * 0.9 : yy + cs * 0.1;
@@ -180,12 +185,14 @@
       const top = ybot + (r1 - r0 + 1) * cs, nf = Math.max(2.8, Math.min(6.5, cs * 0.55)); ink(DARK); font('normal', nf);
       for (let k = 0; k < n; k++) { const s = String(n - k), xx = x0 + k * cs + cs / 2; if (cs < 6 && (n - k) % 5 && n - k !== 1 && n - k !== n) continue; text(s, xx, top + 3, { align: 'center' }); text(s, xx, ybot - nf - 2, { align: 'center' }); }
       const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? Wr().strandList(EX.extras).filter(e => EX.Y.some(row => row.includes(e.k))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']])
-        .concat(EX.G ? [[1, '2 dc in next st then sk 1'], [2, 'sk 1 then 2 dc in next st'], [3, 'sk 1 then 3 dc in next st then sk 1']].filter(([b]) => EX.G.some(row => row.includes(b))).map(([b, t]) => [Y[0].hex, b, t]) : []);
+        .concat(EX.G ? [[1, '2 dc in next st then sk 1'], [2, 'sk 1 then 2 dc in next st'], [3, 'sk 1 then 3 dc in next st then sk 1']].filter(([b]) => EX.G.some(row => row.includes(b))).map(([b, t]) => [Y[0].hex, b, t]) : [])
+        .concat(multiCarry.size ? [['#edf3fa', 'carry2', 'C + D carried (preference only)']] : []);
       let kx = 54, ky = ybot - 30; font('normal', 8);
       items.forEach(([hx, m, t]) => { const tw = width(t, 'normal', 8) + 30; if (kx + tw > LW - 54) { kx = 54; ky -= 16; }
         fill(hx); stroke(DARK); doc.setLineWidth(.4); rect(kx, ky - 3, 10, 10, true, true); const ik = lum(rgbOf(hx)) < 140 ? '#ffffff' : '#1a1a1a';
         if (m === 'X') { stroke(ik); line(kx + 2, ky - 1, kx + 8, ky + 5); line(kx + 2, ky + 5, kx + 8, ky - 1); }
         if (m === 'BS') { ink(ik); font('bold', 4.5); text('BS', kx + 5, ky, { align: 'center' }); }
+        if (m === 'carry2') { stroke('#426b9f'); rect(kx, ky - 3, 10, 10, false, true); ink('#426b9f'); font('bold', 7); text('2', kx + 5, ky - .5, { align: 'center' }); }
         if (typeof m === 'number') gmark(kx + 5, kx + 1.5, kx + 8.5, ky + 6, ky - 2, m, ik, .7);
         ink(DARK); font('normal', 8); text(t, kx + 14, ky); kx += Math.max(160, tw); });
       if (pi < ranges.length - 1) { ink(TEAL); font('bold', 9); text('Continued on next page >>', LW - 54, LH - 96, { align: 'right' }); }

@@ -199,8 +199,7 @@
   /* ---------- the editor canvas ---------- */
   function render() { if (!st.d) return; syncLinked(); const d = st.d, D = derive();
     const cell = Math.max(6, Math.min(24, Math.floor(Math.min(620, ($('dWrap').clientWidth || 620) - 4) / Math.max(D.W, 1))));
-    const show = D.two.length ? D.bad.map((r, i) => r.map((v, c) => (v || (D.two.includes(i) && D.Y[i][c]) ? 1 : 0))) : D.bad;
-    const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: show, mine: d.K, auto: d.auto, groups: d.G });
+    const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: D.bad, adviceRows: D.two, mine: d.K, auto: d.auto, groups: d.G });
     if (st.showX) { const g = cv.getContext('2d'), k = cell, p = Math.max(2, k * 0.25); g.lineWidth = Math.max(1, k / 10);
       const isLean = (i, c) => d.G[i] && ((c > 0 && d.G[i][c - 1] & 2) || (c + 1 < D.W && d.G[i][c + 1] & 1) || d.G[i][c]);
       D.X.forEach((row, i) => row.forEach((v, c) => { if (!v && !isLean(i, c)) return; const x = c * k, y = (D.H - 1 - i) * k, rgb = D.vis(i, c);
@@ -216,14 +215,15 @@
       : (any(d.G) ? '<b class="ok">✔ Base chart is workable.</b> Diagonal stitches reshape the pixel edges; review the written groups before crocheting.' : '<b class="ok">✔ Workable.</b> Every square can be crocheted as shown.'))
       );
     else $('dNote').querySelectorAll('.flag').forEach(e => e.remove());
-    // your rule: one carried strand per row (shown even after another message)
-    if (D.two.length) $('dNote').insertAdjacentHTML('beforeend', `<span class="flag"><br><b class="warn">⚑ Row${D.two.length > 1 ? 's' : ''} ${D.two.map(i => i + 1).join(', ')} carr${D.two.length > 1 ? 'y' : 'ies'} both C and D</b> (outlined). That's more than one carried strand in a row. Change some squares to one strand, or leave it if you meant to.</span>`);
+    // Preference advice stays separate from actual stitch errors.
+    if (D.two.length) $('dNote').insertAdjacentHTML('beforeend', `<span class="flag"><br><b class="carryAdvice">2 · Row${D.two.length > 1 ? 's' : ''} ${D.two.map(i => i + 1).join(', ')} carr${D.two.length > 1 ? 'y' : 'ies'} both C and D</b>. Blue 2 markers at the row edge are preference notices. Red cell outlines identify stitch errors.</span>`);
     delete $('dNote').dataset.keep;
     ['A', 'B', 'C', 'D'].forEach(L => { const hx = st.plan[L][0].hex; $('col' + L).value = hx; document.querySelectorAll(`[data-tool="${L}"] .dot`).forEach(e => { e.style.background = hx; }); });
+    $('carryLegend').hidden = !D.two.length;
     renderOut(D);
   }
   /* tap / drag on the editor */
-  function bindPaint(cv, D) { const d = st.d, H = D.H, k = cv.width / D.W; let down = false, last = '', before = null;
+  function bindPaint(cv, D) { const d = st.d, H = D.H, k = cv._cell; let down = false, last = '', before = null;
     const at = e => { const b = cv.getBoundingClientRect(); return [Math.floor((e.clientY - b.top) * cv.height / b.height / k), Math.floor((e.clientX - b.left) * cv.width / b.width / k)]; };
     const fill = (r, c, rgb) => { const g = cv.getContext('2d'); g.fillStyle = `rgb(${rgb})`; g.fillRect(c * k + 1, r * k + 1, k - 1, k - 1); };
     const hit = (e, first) => { const [r, c] = at(e), key = r + ',' + c; if (key === last || r < 0 || c < 0 || r >= H || c >= D.W) return; last = key; const i = H - 1 - r, t = st.tool;
@@ -357,7 +357,7 @@
   const extraLegend = D => (hasY(D) ? extras().list.filter(e => D.Y.some(x => x.includes(e.k))).map(e => ({ hex: e.hex, rgb: C.hexToRgb(e.hex), text: `${e.hex.toUpperCase()}  ·  ${e.label} (carried strand${e.row > 1 ? `, from row ${e.row}` : ''})` })) : []);
   const dirOpts = D => Object.assign(hasY(D) ? { Y: D.Y, extras: extras() } : {}, hasG() ? { G: st.d.G } : {}, { yarnOf: ownYarn });
   const leanFn = () => (hasG() ? (i, c) => M.leanAt(st.d.G, i, c) : null);
-  const chartOpts = (D, extra) => Object.assign({ cell: D.W > 60 ? 18 : 24, rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), carry: carryTag(D), groups: hasG() ? st.d.G : null, yarnLabel: ownYarn }, extra);
+  const chartOpts = (D, extra) => Object.assign({ cell: D.W > 60 ? 18 : 24, rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), carry: carryTag(D), groups: hasG() ? st.d.G : null, yarnLabel: ownYarn, bad: D.bad, adviceRows: D.two }, extra);
   function renderOut(D) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab)); ['chart', 'written', 'preview', 'fabric'].forEach(t => { $(t + 'Tab').hidden = t !== st.tab; });
     $('summary').textContent = `${D.W + 2} stitches (with border stitches) × ${D.H} rows + chain · ${D.X.flat().reduce((a, b) => a + b, 0)} dc's` + (hasG() ? ` · ${st.d.G.flat().filter(v => v).length} leaning group(s)` : '') + (D.n ? ' · not workable yet (red squares)' : '');
@@ -370,8 +370,8 @@
         note('colorNote', `Row ${row} selected (worked in ${ownYarn(row)}). Letters on this row: ${sum || 'empty'}. Swap letters or change the row's yarn below.`); render(); };
       drawBank(); }
     if (st.tab === 'written') $('written').textContent = W8().directions(D.X, st.plan, dirOpts(D));
-    if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), yarnOf: ownYarn }));
-    if (st.tab === 'fabric') replace('fabCv', Rn.drawGrid(D.F, { cell: Math.max(4, Math.min(16, Math.floor(520 / D.W))), cellRGB: D.vis }));
+    if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), yarnOf: ownYarn, bad: D.bad, adviceRows: D.two }));
+    if (st.tab === 'fabric') replace('fabCv', Rn.drawGrid(D.F, { cell: Math.max(4, Math.min(16, Math.floor(520 / D.W))), cellRGB: D.vis, bad: D.bad, adviceRows: D.two }));
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { st.tab = b.dataset.tab; render(); });
   function pick(hex) { if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
@@ -414,7 +414,7 @@
   $('resetStripes').onclick = () => { for (const L of 'ABCD') st.plan[L] = [st.plan[L][0]]; note('colorNote', 'Stripes removed: one color per letter.'); render(); };
   const dlCanvas = (cv, name) => { const a = document.createElement('a'); a.download = name; a.href = cv.toDataURL('image/png'); a.click(); };
   $('dlChart').onclick = () => { const D = derive(); dlCanvas(Rn.drawChart(D.F, D.X, chartOpts(D, { legend: C.legend(st.plan, D.H, ownYarn).concat(extraLegend(D)) })), 'mosaic_chart.png'); };
-  $('dlPrev').onclick = () => { const D = derive(); dlCanvas(Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn() }), 'mosaic_preview.png'); };
+  $('dlPrev').onclick = () => { const D = derive(); dlCanvas(Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), bad: D.bad, adviceRows: D.two }), 'mosaic_preview.png'); };
   $('copyTxt').onclick = async () => { const t = W8().directions(derive().X, st.plan, dirOpts(derive())); try { await navigator.clipboard.writeText(t); note('txtNote', 'Copied.'); }
     catch (e) { const s = getSelection(), rg = document.createRange(); rg.selectNodeContents($('written')); s.removeAllRanges(); s.addRange(rg); note('txtNote', 'Selected: press Ctrl/Cmd+C to copy.'); } };
   $('dlTxt').onclick = () => { const D = derive(), a = document.createElement('a'); a.download = 'mosaic_pattern.txt'; a.href = URL.createObjectURL(new Blob([W8().directions(D.X, st.plan, dirOpts(D))], { type: 'text/plain' })); a.click(); };
@@ -434,7 +434,7 @@
   $('pdfForm').onsubmit = async ev => { ev.preventDefault(); const title = $('pdfTitle').value.trim(); if (!title) return note('pdfNote', 'Please type a title.');
     note('pdfNote', 'Making PDF…');
     try { const D = derive(), names = {}; document.querySelectorAll('#pdfColors input').forEach(i => names[i.dataset.key] = i.value);
-      const pv = Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), noLabel: true });
+      const pv = Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), noLabel: true, bad: D.bad, adviceRows: D.two });
       const doc = window.MosaicPDF.build({ X: D.X, F: D.F, plan: st.plan, ...dirOpts(D), title, names, notes: $('pdfNotes').value, ideas: $('pdfIdeas').value, project: $('pdfProject').value, border: $('pdfBorder').value,
         logo: await getLogo(), preview: pv.toDataURL('image/png'), previewW: pv.width, previewH: pv.height });
       doc.save(window.MosaicPDF.fileName(title)); $('pdfDlg').close(); }

@@ -39,7 +39,7 @@
  <p class="small dnote" id="dNote"></p>
  <p class="small">Color changes (A/B/C/D stripes) are in the Chart tab below — adjust them while red trouble spots are visible, then re-Fix. Example: set D brown low, then red from the hair rows up.</p>
  <div class="out" id="dWrap"><canvas id="dCv"></canvas></div>
- <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix</p>
+ <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix <span class="k carryAdvice">2</span>both C + D carried (preference only)</p>
  <div class="optsBox" id="optsBox" hidden><div class="row"><b>Fix options</b><span class="small" id="optsNote"></span><button class="sec" id="optsClose">Close</button></div><div class="cands" id="opts"></div></div>
  <details class="sizeBox"><summary>Rows &amp; columns</summary>
   <div class="row"><span class="small lab">Top</span><button class="sec" data-rows="top,1">+ row</button><button class="sec" data-rows="top,-1">− row</button><span class="small lab">Bottom</span><button class="sec" data-rows="bottom,2">+ 2 rows</button><button class="sec" data-rows="bottom,-2">− 2 rows</button></div>
@@ -54,6 +54,7 @@
 <section>
  <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Design preview</button><button data-tab="fabric">Fabric</button></nav>
  <p class="small" id="summary"></p>
+ <p class="small carryAdvice" id="carryLegend" hidden><b>2 at the row edge</b> = both C and D carried (preference only). Red cell outlines = stitch errors.</p>
  <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
   <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color. The yarn you picked below changes from that row up. Any row can change.</div>
    <div class="row"><span class="small">Change the color of:</span><button class="sec on" data-stripe="row">That row's yarn (A or B)</button><button class="sec" data-stripe="C">C</button><button class="sec" data-stripe="D">D</button></div>

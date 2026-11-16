@@ -14,17 +14,17 @@ function test(name, fn) { fn(); checks++; console.log('PASS', name); }
 
 // Exercise app handlers and real rendering functions. DOM/canvas stubs record
 // operations; browser layout is deliberately outside this test's scope.
-function app() {
+function app({ canvasFactory } = {}) {
   const ids = new Map(), storage = new Map();
   function element(id = '') {
-    const ops = [], ctx = new Proxy({ measureText: s => ({ width: String(s).length * 6 }), createRadialGradient: () => ({ addColorStop() {} }) }, {
-      get: (o, key) => key in o ? o[key] : (...args) => ops.push([key, ...args]), set: (o, key, value) => (o[key] = value, true)
+    const ops = [], draws = [], native = canvasFactory ? canvasFactory(200, 200) : null, ctx = new Proxy({ measureText: s => ({ width: String(s).length * 6 }), createRadialGradient: () => ({ addColorStop() {} }) }, {
+      get: (o, key) => key in o ? o[key] : (...args) => { ops.push([key, ...args]); draws.push({ method: key, args, stroke: o.strokeStyle, fill: o.fillStyle }); }, set: (o, key, value) => (o[key] = value, true)
     });
-    return { id, dataset: {}, style: {}, children: [], ops, classList: { toggle() {} }, clientWidth: 620, width: 200, height: 200,
-      querySelectorAll: () => [], getContext: () => ctx, replaceWith(e) { e.id = this.id; ids.set(this.id, e); },
+    return { id, dataset: {}, style: {}, children: [], ops, draws, native, classList: { toggle() {} }, clientWidth: 620, width: 200, height: 200,
+      querySelectorAll: () => [], getContext() { if (!native) return ctx; if (native.width !== this.width) native.width = this.width; if (native.height !== this.height) native.height = this.height; return native.getContext('2d'); }, replaceWith(e) { e.id = this.id; ids.set(this.id, e); },
       append(...args) { this.children.push(...args); }, appendChild(e) { this.children.push(e); },
-      setAttribute() {}, insertAdjacentHTML() {}, scrollIntoView() {}, setPointerCapture() {},
-      getBoundingClientRect() { return { top: 0, left: 0, width: this.width, height: this.height }; }, toDataURL: () => '', click() { this.onclick?.(); }
+      setAttribute() {}, insertAdjacentHTML() {}, scrollIntoView() {}, setPointerCapture() {}, showModal() { this.open = true; }, close() { this.open = false; }, focus() {},
+      getBoundingClientRect() { return { top: 0, left: 0, width: this.width, height: this.height }; }, toDataURL: () => native ? native.toDataURL('image/png') : '', click() { this.onclick?.(); }
     };
   }
   const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
@@ -143,6 +143,44 @@ test('PDF, screen directions and chart use the same overridden yarn; chain stays
   a.click('dlPrev'); a.click('dlChart');
   const out = process.env.MOSAIC_TEST_OUTPUT;
   if (out) { fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'override.pdf'), Buffer.from(doc.output('arraybuffer'))); }
+});
+
+test('multiple carried strands get row-edge advice, while only stitch errors get red cells', () => {
+  const a = app(); a.open(['ACDA', 'BDBB', 'AAAA']);
+  assert.equal(a.derive().n, 0); assert.equal(a.ids.get('dFix').disabled, true);
+  const red = cv => cv.draws.filter(o => o.method === 'strokeRect' && o.stroke === '#e0001b');
+  const badges = cv => cv.draws.filter(o => o.method === 'fillText' && o.args[0] === '2' && o.fill === '#426b9f');
+  assert.equal(red(a.ids.get('dCv')).length, 0);
+  assert.equal(badges(a.ids.get('dCv')).length, 1);
+  assert.ok(badges(a.ids.get('dCv'))[0].args[1] > a.derive().W * a.ids.get('dCv')._cell);
+  for (const tab of ['chart', 'preview', 'fabric']) {
+    a.selectors['[data-tab]'].find(e => e.dataset.tab === tab).onclick();
+    const cv = a.ids.get({ chart: 'chartCv', preview: 'prevCv', fabric: 'fabCv' }[tab]);
+    assert.equal(red(cv).length, 0); assert.equal(badges(cv).length, 1);
+  }
+  // Preferences alone do not block PDF export.
+  a.window.jspdf = require('../site/vendor/jspdf.umd.min.js');
+  vm.runInContext(fs.readFileSync(path.join(site, 'pdf.js'), 'utf8'), a.context);
+  a.click('mkPdf'); assert.equal(a.ids.get('pdfDlg').open, true); a.ids.get('pdfDlg').close();
+  // A separate actual top-row error remains visible in every output.
+  a.open(['ACDA', 'BDBB', 'BAAA']); assert.equal(a.derive().n, 1);
+  assert.equal(red(a.ids.get('dCv')).length, 1); assert.equal(badges(a.ids.get('dCv')).length, 1);
+  for (const tab of ['chart', 'preview', 'fabric']) {
+    a.selectors['[data-tab]'].find(e => e.dataset.tab === tab).onclick();
+    const cv = a.ids.get({ chart: 'chartCv', preview: 'prevCv', fabric: 'fabCv' }[tab]);
+    assert.equal(red(cv).length, 1); assert.equal(badges(cv).length, 1);
+  }
+  a.click('mkPdf'); assert.equal(a.ids.get('pdfDlg').open, false);
+  // The extra advice rail must not change painting coordinates or accept paint.
+  a.open(['ACDA', 'BBBB', 'AAAA']); let cv = a.ids.get('dCv');
+  const point = (x, y) => ({ clientX: x, clientY: y, pointerId: 1, preventDefault() {} });
+  cv.onpointerdown(point(84, 12)); cv.onpointerup(); assert.equal(a.st.d.P[2][3], 'B'); assert.equal(a.st.d.P[2][2], 'A');
+  const before = plain(a.st.d.P); cv = a.ids.get('dCv'); cv.onpointerdown(point(102, 12)); cv.onpointerup();
+  assert.deepEqual(plain(a.st.d.P), before);
+  // Dense rows still have separate, non-overlapping advice badges.
+  const tiny = a.window.MosaicRender.drawGrid([[0], [0]], { cell: 4, adviceRows: [0, 1] });
+  const boxes = tiny.draws.filter(o => o.method === 'strokeRect' && o.stroke === '#426b9f');
+  assert.equal(boxes.length, 2); assert.ok(boxes.every(o => o.args[3] < 4));
 });
 
 test('500 standard charts round-trip through stitches and written instructions', () => {

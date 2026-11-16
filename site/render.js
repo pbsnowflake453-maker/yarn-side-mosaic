@@ -3,10 +3,28 @@
   'use strict';
   const { color, simulate } = root.Mosaic;
   const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const ADVICE = '#426b9f', ADVICE_TEXT = '2 = C + D carried (preference only)';
   function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function carryFlags(g, rows, x, centerY, cell) {
+    const size = Math.max(3, Math.min(16, cell * .8));
+    g.save(); g.lineWidth = 1.5; g.font = `bold ${Math.max(2, Math.round(size * .7))}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    (rows || []).forEach(i => { const y = centerY(i) - size / 2;
+      g.fillStyle = '#edf3fa'; g.fillRect(x, y, size, size); g.strokeStyle = ADVICE; g.strokeRect(x + .5, y + .5, size - 1, size - 1);
+      g.fillStyle = ADVICE; g.fillText('2', x + size / 2, y + size / 2);
+    }); g.restore();
+  }
+  function problems(g, bad, left, top, cw, rh, H) {
+    if (!bad) return; g.save(); g.strokeStyle = '#e0001b'; g.lineWidth = Math.max(2, Math.min(cw, rh) / 6);
+    const p = g.lineWidth / 2;
+    bad.forEach((row, i) => row.forEach((v, c) => { if (v) g.strokeRect(left + c * cw + p, top + (H - 1 - i) * rh + p, cw - 2 * p, rh - 2 * p); })); g.restore();
+  }
+  function adviceCaption(g, width, y) {
+    g.save(); let size = 10; while (size > 6) { g.font = `${size}px sans-serif`; if (g.measureText(ADVICE_TEXT).width <= width - 8) break; size--; }
+    g.font = `${size}px sans-serif`; g.fillStyle = ADVICE; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(ADVICE_TEXT, 4, y); g.restore();
+  }
 
   function drawGrid(G, opts = {}) { // G bottom-up 0/1; hl = mask of added cells
-    const cell = opts.cell || 8, H = G.length, W = G[0].length, cv = mk(W * cell, H * cell), g = cv.getContext('2d');
+    const cell = opts.cell || 8, H = G.length, W = G[0].length, rail = opts.adviceRows && opts.adviceRows.length ? 20 : 0, cv = mk(W * cell + rail, H * cell), g = cv.getContext('2d');
     const A = opts.a || [250, 250, 250], B = opts.b || [25, 25, 25];
     for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) {
       let col = opts.cellRGB ? opts.cellRGB(i, c, G[i][c]) : (G[i][c] ? B : A); if (opts.hl && opts.hl[i][c]) col = [235, 120, 0];
@@ -15,6 +33,8 @@
     if (cell >= 5) { g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 1;
       for (let c = 0; c <= W; c++) { g.beginPath(); g.moveTo(c * cell + .5, 0); g.lineTo(c * cell + .5, H * cell); g.stroke(); }
       for (let i = 0; i <= H; i++) { g.beginPath(); g.moveTo(0, i * cell + .5); g.lineTo(W * cell, i * cell + .5); g.stroke(); } }
+    problems(g, opts.bad, 0, 0, cell, cell, H);
+    carryFlags(g, opts.adviceRows, W * cell + 3, i => (H - i - .5) * cell, cell);
     return cv;
   }
   /* Leaning-stitch symbols: slanted lines centered in the squares, with X drawn underneath (they are dc stitches).
@@ -42,7 +62,7 @@
   }
   /* Editable view of the finished look F (bottom-up). bad = can't be worked (red), mine = hand-edited (teal dot), auto = changed by the fixer (orange). */
   function drawEdit(F, opts = {}) {
-    const cell = opts.cell || 12, H = F.length, W = F[0].length, cv = mk(W * cell, H * cell), g = cv.getContext('2d');
+    const cell = opts.cell || 12, H = F.length, W = F[0].length, rail = opts.adviceRows && opts.adviceRows.length ? 20 : 0, cv = mk(W * cell + rail, H * cell), g = cv.getContext('2d');
     for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) { g.fillStyle = css(opts.cellRGB(i, c, F[i][c])); g.fillRect(c * cell, (H - 1 - i) * cell, cell, cell); }
     if (cell >= 5) gridLines(g, W, H, cell, 0.2);
     const lw = Math.max(2, Math.round(cell / 6));
@@ -53,13 +73,14 @@
       if (opts.mine && opts.mine[i][c]) { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, Math.max(1.5, cell * 0.16), 0, 2 * Math.PI); g.fill(); g.stroke(); }
     }
     drawGroups(g, opts.groups, c => c * cell + cell / 2, i => (H - 1 - i) * cell, cell);
+    carryFlags(g, opts.adviceRows, W * cell + 3, i => (H - i - .5) * cell, cell);
     cv._cell = cell; cv._H = H; return cv;
   }
 
   function drawChart(F, X, opts = {}) {
-    const cell = opts.cell || 22, H = F.length, W = F[0].length, n = W + 2, SW = Math.round(cell * 0.8), L = 2.6 * cell + SW, top = 1.4 * cell;
+    const cell = opts.cell || 22, H = F.length, W = F[0].length, n = W + 2, SW = Math.round(cell * 0.8), L = (opts.carry ? 4 : 2.6) * cell + SW, top = 1.4 * cell;
     const A = opts.a || [250, 250, 250], B = opts.b || [25, 25, 25], rowRGB = opts.rowRGB || (r => (color(r) ? B : A));
-    const legend = opts.legend || [], legH = legend.length ? (legend.length + 1.5) * cell * 0.8 : 0;
+    const legend = opts.legend || [], advice = opts.adviceRows && opts.adviceRows.length, adviceH = advice ? cell * .7 : 0, legH = (legend.length ? (legend.length + 1.5) * cell * 0.8 : 0) + adviceH;
     const cv = mk(Math.round(2 * L - SW + n * cell), Math.round(top + (H + 1) * cell + 2.6 * cell + legH)), g = cv.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
     const inkFor = c => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < 140 ? '#fff' : '#000');
@@ -89,16 +110,19 @@
       label(r, y, (opts.yarnLabel ? opts.yarnLabel(r) : (rc ? 'B' : 'A')) + (opts.carry ? opts.carry(r) : ''));
     }
     drawGroups(g, opts.groups, c => L + (c + 1) * cell + cell / 2, i => top + (H - 1 - i) * cell, cell, { lw: Math.max(1.5, cell / 12) });
+    problems(g, opts.bad, L + cell, top, cell, cell, H);
+    carryFlags(g, opts.adviceRows, cv.width - 17, i => top + (H - i - .5) * cell, cell);
     const y0 = top + H * cell;
     for (let k = 0; k < n; k++) { const x = L + k * cell; g.strokeStyle = '#000'; g.lineWidth = Math.max(1.2, cell / 14);
       g.beginPath(); g.ellipse(x + cell / 2, y0 + cell / 2, cell * 0.36, cell * 0.2, 0, 0, 2 * Math.PI); g.stroke(); }
     label(0, y0, 'A');
     g.font = small; g.textAlign = 'center'; g.fillStyle = '#000';
     for (let k = 0; k < n; k++) { const num = String(n - k), x = L + k * cell + cell / 2; g.fillText(num, x, top - cell * 0.45); g.fillText(num, x, y0 + cell * 1.45); }
-    g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05);
+    g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05, cv.width - L - 4);
     g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
-      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight dc beside it (both are dc, both show X, same stitch 2 rows down).' : ''), L, y0 + cell * 2.55);
-    if (legend.length) { let y = y0 + cell * 3.2; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
+      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight dc beside it (both are dc, both show X, same stitch 2 rows down).' : ''), L, y0 + cell * 2.55, cv.width - L - 4);
+    if (advice) adviceCaption(g, cv.width, y0 + cell * 3.15);
+    if (legend.length) { let y = y0 + cell * 3.2 + adviceH; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
       for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(L, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(L + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
         g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }
     return cv;
@@ -106,7 +130,8 @@
 
   function drawPreview(X, opts = {}) {
     const H = X.length, W = X[0].length, n = W + 2, cw = opts.cw || 28, rh = opts.rh || 25, pad = 30;
-    const cv = mk(n * cw + 2 * pad, (H + 1) * rh + 2 * pad), g = cv.getContext('2d');
+    const advice = opts.adviceRows && opts.adviceRows.length;
+    const cv = mk(n * cw + 2 * pad, (H + 1) * rh + 2 * pad + (advice ? 18 : 0)), g = cv.getContext('2d');
     let s = 7; const R = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
     const yarn = [opts.a || [238, 232, 220], opts.b || [34, 34, 38]], rowRGB = opts.rowRGB || (r => yarn[color(r)]), sh = (c, f) => css(c.map(v => Math.max(0, Math.min(255, v * f))));
     g.fillStyle = '#cdc4b6'; g.fillRect(0, 0, cv.width, cv.height);
@@ -140,7 +165,10 @@
     }
     const grd = g.createRadialGradient(cv.width * .4, cv.height * .35, 10, cv.width * .5, cv.height * .5, Math.max(cv.width, cv.height) * .75);
     grd.addColorStop(0, 'rgba(255,255,255,0.06)'); grd.addColorStop(1, 'rgba(0,0,0,0.22)'); g.fillStyle = grd; g.fillRect(0, 0, cv.width, cv.height);
-    if (!opts.noLabel) { g.fillStyle = 'rgba(80,74,66,.85)'; g.font = '13px sans-serif'; g.textAlign = 'right'; g.fillText('Design preview', cv.width - 10, cv.height - 10); }
+    problems(g, opts.bad, pad + cw, pad, cw, rh, H);
+    carryFlags(g, opts.adviceRows, pad + n * cw + 5, i => Y0(i) + rh / 2, rh);
+    if (advice) adviceCaption(g, cv.width, cv.height - 9);
+    if (!opts.noLabel) { g.fillStyle = 'rgba(80,74,66,.85)'; g.font = '13px sans-serif'; g.textAlign = 'right'; g.fillText('Design preview', cv.width - 10, cv.height - (advice ? 27 : 10)); }
     return cv;
   }
   /* The uploaded image with the grid the app read: lines between cells, a dot where each cell's color was sampled. */

@@ -13,6 +13,7 @@
 - Carried C/D dc may cover the same carried letter and hex color below it, with no stacked dc. Derivation must never modify the requested picture to force a dc.
 - Lean groups are conservatively supported from row 3 onward with a same-color shared anchor two chart rows below. Validate actual colors with `groupProblem` context, including carried strands and stripes. Suggest only stepped corners, not arbitrary free neighbors; never certify the whole shaped fabric from the binary grid alone.
 - A cell showing the opposite of its row color is a mismatch and needs an X (dc worked 2 rows down) directly above. Workable only if no two vertically adjacent mismatches in a column, none in the top row, and the covering stitch actually uses the requested yarn; the fixer edits the minimum pixels to comply.
+- Display preference notices separately from stitch errors: both C and D carried on one row gets a blue `2` at the row edge, never red outlines on those squares. Red cells are reserved for actual stitch errors. Preserve this distinction in the editor, preview/fabric, PNGs, and PDF charts; preference notices must not block PDF export.
 - Run `node tests/test_regressions.js` for self-contained engine, UI-handler, save/Combine, and PDF regression checks. Canvas stubs do not replace browser layout testing.
 - Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (test_written.js).
 - Defaults: worsted #4, H/5 mm hook, gauge 15 sts x 15 rows = 4".
