@@ -154,7 +154,7 @@
   function openDesign(rows, colors, groups, msg, yarn, reference) {
     const H = rows.length, W = rows[0].length, P = []; for (let i = H - 1; i >= 0; i--) P.push([...rows[i]]);
     const G = zeros(H, W); (groups || []).forEach(([t, c, b]) => { const i = H - 1 - t; if (i >= 0 && i < H && c >= 0 && c < W) G[i][c] = b; });
-    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: Array.from({ length: H }, (_, i) => yarn && /^[AB]$/.test(yarn[i]) ? yarn[i] : null) }; st.hist = []; st.opts = []; $('optsBox').hidden = true; st.selRow = null;
+    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: Array.from({ length: H }, (_, i) => yarn && /^[AB]$/.test(yarn[i]) ? yarn[i] : null) }; st.hist = []; st.opts = []; st.sug = []; $('optsBox').hidden = true; st.selRow = null;
     st.plan = toPlan(colors);
     st.d.reference = validReference(reference) || validReference(startingReference());
     const lost = cleanAll(); setView('design'); note('dNote', msg + (lost ? ` ${lost} leaning group${lost > 1 ? 's' : ''} didn't fit and came out.` : '')); $('dNote').dataset.keep = 1; render();
@@ -185,9 +185,10 @@
     list: [1, 2].flatMap(k => st.plan['CD'[k - 1]].map((e, i, a) => ({ k, label: a.length > 1 ? 'CD'[k - 1] + (i + 1) : 'CD'[k - 1], hex: e.hex, row: e.row }))) });
   const any = A => A.some(r => r.some(v => v));
   const leanOpts = D => ({ colorAt: (i, c) => D.target(i, c).join(','), yarnAt: i => rowRGB(i + 1).join(',') });
-  /* Auto-suggest leaning groups for curves: where a straight X has a free neighbor that can lean in to smooth a diagonal. */
+  /* Find spots where a leaning group could smooth a corner. Nothing is added to the design here:
+     the spots are shown in blue and only go in when you tap one (or Add all). */
   function suggestLeans(D) {
-    const G = st.d.G, H = D.H, W = D.W, added = [];
+    const G = copy2(st.d.G), H = D.H, W = D.W, found = [];
     const context = leanOpts(D);
     const canLean = (i, b, bits) => {
       const wing = b + (bits === 1 ? -1 : 1), own = context.yarnAt(i);
@@ -199,15 +200,19 @@
         && context.colorAt(i - 1, wing) === context.colorAt(i - 2, wing);
     };
     for (let i = 2; i < H; i++) for (let b = 1; b < W - 1; b++) if (D.X[i][b] && !G[i][b]) {
-      // try left lean if neighbor free and would help a curve
-      if (!D.X[i][b - 1] && !G[i][b - 1] && canLean(i, b, 1)) {
-        G[i][b] = 1; added.push([i, b, 1]);
-      } else if (!D.X[i][b + 1] && !G[i][b + 1] && canLean(i, b, 2)) {
-        G[i][b] = 2; added.push([i, b, 2]);
-      }
+      if (!D.X[i][b - 1] && !G[i][b - 1] && canLean(i, b, 1)) { G[i][b] = 1; found.push([i, b, 1]); }
+      else if (!D.X[i][b + 1] && !G[i][b + 1] && canLean(i, b, 2)) { G[i][b] = 2; found.push([i, b, 2]); }
     }
-    return added.length;
+    return found;
   }
+  /* suggestions that can still go in as the design is now */
+  function liveSuggestions(D) { const G = st.d.G, ctx = leanOpts(D);
+    return (st.sug || []).filter(([i, b, bits]) => i < D.H && b < D.W && !G[i][b]
+      && ![b].concat(bits & 1 ? [b - 1] : [], bits & 2 ? [b + 1] : []).some(c => D.Y[i][c])
+      && !M.groupProblem(D.X, G, i, b, bits, ctx)); }
+  const SYM = { 1: '\\|', 2: '|/', 3: '\\|/' };
+  function addSuggestions(list, msg) { if (!list.length) return; push(); list.forEach(([i, b, bits]) => { st.d.G[i][b] = bits; });
+    st.sug = (st.sug || []).filter(s => !list.includes(s)); changed(msg); }
   function cleanAll() { const d = st.d; if (!any(d.G)) return 0; const D = derive(); let lost = M.cleanGroups(D.X, d.G, leanOpts(D));
     d.G.forEach((row, i) => row.forEach((v, b) => { if (v && M.groupCols(d.G, i, b).some(c => D.Y[i][c])) { d.G[i][b] = 0; lost++; } })); return lost; }
   const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto), yarn: (d.yarn || []).slice(), linked: { ...d.linked }, plan: JSON.parse(JSON.stringify(st.plan)) }; };
@@ -220,14 +225,18 @@
   /* ---------- the editor canvas ---------- */
   function render() { if (!st.d) return; renderReference(); syncLinked(); const d = st.d, D = derive();
     const cell = Math.max(6, Math.min(24, Math.floor(Math.min(620, ($('dWrap').clientWidth || 620) - 4) / Math.max(D.W, 1))));
-    const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: D.bad, adviceRows: D.two, mine: d.K, auto: d.auto, groups: d.G });
+    st.sug = liveSuggestions(D); $('sugBox').hidden = !st.sug.length; $('sugNote').textContent = st.sug.length ? `${st.sug.length} suggested lean${st.sug.length > 1 ? 's' : ''} (blue)` : '';
+    const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: D.bad, adviceRows: D.two, mine: d.K, auto: d.auto, groups: d.G, suggest: st.sug });
     if (st.showX) { const g = cv.getContext('2d'), k = cell, p = Math.max(2, k * 0.25); g.lineWidth = Math.max(1, k / 10);
       const isLean = (i, c) => d.G[i] && ((c > 0 && d.G[i][c - 1] & 2) || (c + 1 < D.W && d.G[i][c + 1] & 1) || d.G[i][c]);
       D.X.forEach((row, i) => row.forEach((v, c) => { if (!v && !isLean(i, c)) return; const x = c * k, y = (D.H - 1 - i) * k, rgb = D.vis(i, c);
         g.strokeStyle = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) < 140 ? '#fff' : '#1a1a1a'; g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + k - p, y + k - p); g.moveTo(x + k - p, y + p); g.lineTo(x + p, y + k - p); g.stroke(); })); }
     replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
     bindPaint(cv, D);
-    $('dSuggestLeans').onclick = () => { if (!st.d) return; const D = derive(), before = snap(), n = suggestLeans(D); if (n) push(before); changed(n ? `Suggested ${n} leaning stitch${n > 1 ? 'es' : ''} for curves.` : 'No supported corner shapes found for new leans.'); };
+    $('dSuggestLeans').onclick = () => { if (!st.d) return; st.sug = suggestLeans(derive()); const n = st.sug.length;
+      note('dNote', n ? `<b>Found ${n} spot${n > 1 ? 's' : ''}</b> where a leaning stitch could smooth a corner (blue, dashed). Nothing has been added: tap a blue spot to add that one, or tap <b>Add all</b>.` : 'No supported corner shapes found for new leans.'); $('dNote').dataset.keep = 1; render(); };
+    $('sugAll').onclick = () => { const L = liveSuggestions(derive()); addSuggestions(L, `<b class="ok">✔ Added</b> ${L.length} leaning stitch${L.length > 1 ? 'es' : ''}. Undo takes ${L.length > 1 ? 'them' : 'it'} out.`); };
+    $('sugHide').onclick = () => { st.sug = []; render(); };
     $('dUndo').disabled = !st.hist.length; $('dFix').disabled = !D.n;
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
@@ -248,6 +257,9 @@
     const at = e => { const b = cv.getBoundingClientRect(); return [Math.floor((e.clientY - b.top) * cv.height / b.height / k), Math.floor((e.clientX - b.left) * cv.width / b.width / k)]; };
     const fill = (r, c, rgb) => { const g = cv.getContext('2d'); g.fillStyle = `rgb(${rgb})`; g.fillRect(c * k + 1, r * k + 1, k - 1, k - 1); };
     const hit = (e, first) => { const [r, c] = at(e), key = r + ',' + c; if (key === last || r < 0 || c < 0 || r >= H || c >= D.W) return; last = key; const i = H - 1 - r, t = st.tool;
+      // a tap on a blue suggested spot adds that leaning group (whatever tool is on)
+      const sg = first && (st.sug || []).find(([si, b, bits]) => i <= si && i >= si - 2 && c >= (bits & 1 ? b - 1 : b) && c <= (bits & 2 ? b + 1 : b));
+      if (sg) { down = false; addSuggestions([sg], `<b class="ok">✔ Added</b> ${SYM[sg[2]]} on row ${sg[0] + 1}: the written row says “${{ 1: '2 dc in next st then sk 1', 2: 'sk 1 then 2 dc in next st' }[sg[2]]}”.`); return; }
       if ('ABCD'.includes(t)) { if (d.P[i][c] === t) return; d.P[i][c] = t; d.mine[i][c] = 1; d.auto[i][c] = 0;
         fill(r, c, t === 'C' || t === 'D' ? strandRGB(t === 'C' ? 1 : 2, i + 1) : C.hexToRgb(C.colorOf(st.plan, t, i + 1))); }
       else if (t === 'cycle') { const order = 'ABCD', cur = d.P[i][c] || 'A', next = order[(order.indexOf(cur) + 1) % 4];
@@ -379,17 +391,20 @@
   const dirOpts = D => Object.assign(hasY(D) ? { Y: D.Y, extras: extras() } : {}, hasG() ? { G: st.d.G } : {}, { yarnOf: ownYarn });
   const leanFn = () => (hasG() ? (i, c) => M.leanAt(st.d.G, i, c) : null);
   const chartOpts = (D, extra) => Object.assign({ cell: D.W > 60 ? 18 : 24, rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), carry: carryTag(D), groups: hasG() ? st.d.G : null, yarnLabel: ownYarn, bad: D.bad, adviceRows: D.two }, extra);
+  /* The Selected row panel: what the tapped row is, and which row tools can be used yet. */
+  function rowPanel() { const d = st.d; if (st.selRow != null && (st.selRow < 1 || st.selRow > d.P.length)) st.selRow = null; const r = st.selRow;
+    document.querySelectorAll('.rowNeed').forEach(b => { b.disabled = r == null; });
+    if (r == null) { $('selRowInfo').textContent = 'Tap a row on the chart (the color strip at its left is easiest).'; return; }
+    const cnt = { A: 0, B: 0, C: 0, D: 0 }; d.P[r - 1].forEach(L => { cnt[L || 'A']++; });
+    const sum = 'ABCD'.split('').map(L => cnt[L] ? L + ':' + cnt[L] : '').filter(Boolean).join(' ');
+    $('selRowInfo').textContent = `Row ${r} · worked in ${ownYarn(r)}${d.yarn && d.yarn[r - 1] ? ' (changed)' : ''} · ${sum || 'empty'}`; }
   function renderOut(D) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab)); ['chart', 'written', 'preview', 'fabric'].forEach(t => { $(t + 'Tab').hidden = t !== st.tab; });
     $('summary').textContent = `${D.W + 2} stitches (with border stitches) × ${D.H} rows + chain · ${D.X.flat().reduce((a, b) => a + b, 0)} dc's` + (hasG() ? ` · ${st.d.G.flat().filter(v => v).length} leaning group(s)` : '') + (D.n ? ' · not workable yet (red squares)' : '');
     if (st.tab === 'chart') { const cv = replace('chartCv', Rn.drawChart(D.F, D.X, chartOpts(D, { selRow: st.selRow })));
       cv.onclick = e => { const g = cv._geo, sc = cv.height / cv.clientHeight, y = e.offsetY * sc, k = Math.floor((y - g.top) / g.cell), row = g.H - k;
-        if (row < 1 || row > g.H) return; st.selRow = row;
-        const i = row - 1, cnt = { A: 0, B: 0, C: 0, D: 0 };
-        st.d.P[i].forEach(L => { cnt[L || 'A']++; });
-        const sum = 'ABCD'.split('').map(L => cnt[L] ? L + ':' + cnt[L] : '').filter(Boolean).join(' ');
-        note('colorNote', `Row ${row} selected (worked in ${ownYarn(row)}). Letters on this row: ${sum || 'empty'}. Swap letters or change the row's yarn below.`); render(); };
-      drawBank(); }
+        if (row < 1 || row > g.H) return; st.selRow = row; note('colorNote', ''); render(); };
+      drawBank(); rowPanel(); }
     if (st.tab === 'written') $('written').textContent = W8().directions(D.X, st.plan, dirOpts(D));
     if (st.tab === 'preview') replace('prevCv', Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), yarnOf: ownYarn, bad: D.bad, adviceRows: D.two }));
     if (st.tab === 'fabric') replace('fabCv', Rn.drawGrid(D.F, { cell: Math.max(4, Math.min(16, Math.floor(520 / D.W))), cellRGB: D.vis, bad: D.bad, adviceRows: D.two }));

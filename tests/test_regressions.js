@@ -30,21 +30,24 @@ test('row overrides validate actual covering yarn, and Fix clears all trouble', 
   a.click('dFix'); assert.equal(a.derive().n, 0); a.click('dUndo'); assert.ok(a.derive().n > 0);
 });
 
-test('Suggest leans is undoable, and a no-op suggestion does not add history', () => {
+test('Suggest leans only shows spots; nothing changes until Add all, which is undoable', () => {
   const a = app(); a.open(['BAB', 'BAB', 'AAA', 'BBB']); a.click('dSuggestLeans');
-  assert.ok(a.st.d.G.flat().some(Boolean)); assert.equal(a.ids.get('dUndo').disabled, false);
+  assert.ok(a.st.sug.length > 0, 'spots are suggested'); assert.ok(!a.st.d.G.flat().some(Boolean), 'design untouched');
+  assert.equal(a.st.hist.length, 0); assert.equal(a.ids.get('sugBox').hidden, false);
+  a.click('sugAll'); assert.ok(a.st.d.G.flat().some(Boolean)); assert.equal(a.st.sug.length, 0); assert.equal(a.ids.get('dUndo').disabled, false);
   a.click('dUndo'); assert.ok(!a.st.d.G.flat().some(Boolean));
-  a.open(['AAA', 'BBB', 'AAA']); a.click('dSuggestLeans'); assert.equal(a.st.hist.length, 0);
+  a.click('dSuggestLeans'); a.click('sugHide'); assert.equal(a.st.sug.length, 0); assert.ok(!a.st.d.G.flat().some(Boolean));
+  a.open(['AAA', 'BBB', 'AAA']); a.click('dSuggestLeans'); assert.equal(a.st.sug.length, 0); assert.equal(a.st.hist.length, 0);
 });
 
 test('lean suggestions require a real corner and manual groups require a matching shared anchor', () => {
   const a = app();
   // A straight dc beside a free square, but only a stripe underneath: no curve.
   a.open(['AAA', 'BAB', 'AAA', 'BBB']); a.click('dSuggestLeans');
-  assert.ok(!a.st.d.G.flat().some(Boolean));
+  assert.equal(a.st.sug.length, 0);
   // The straight dc is valid, but its shared anchor is a C-colored square.
   a.open(['ACA', 'BAB', 'AAA']); assert.equal(a.derive().n, 0);
-  a.click('dSuggestLeans'); assert.ok(!a.st.d.G.flat().some(Boolean));
+  a.click('dSuggestLeans'); assert.equal(a.st.sug.length, 0);
   const D = a.derive(), context = { colorAt: (i, c) => D.target(i, c).join(','), yarnAt: () => '255,255,255' };
   assert.equal(M.groupProblem(plain(D.X), zeros(3, 3), 2, 1, 1, context), 'anchor');
   // Reopening an older piece must remove unsupported groups without altering pixels.
@@ -53,7 +56,8 @@ test('lean suggestions require a real corner and manual groups require a matchin
   assert.deepEqual(plain(a.st.d.P), original); assert.ok(!a.st.d.G.flat().some(Boolean));
   // A genuine stepped A/B boundary still supports 2 dc in one base loop.
   a.open(['BAB', 'BAB', 'AAA']); a.click('dSuggestLeans');
-  assert.equal(a.st.d.G[2][1], 1);
+  assert.deepEqual(plain(a.st.sug), [[2, 1, 1]]); assert.equal(a.st.d.G[2][1], 0);
+  a.click('sugAll'); assert.equal(a.st.d.G[2][1], 1);
   const line = a.window.MosaicWritten.directions(a.derive().X, a.st.plan, { G: a.st.d.G }).split('\n').find(l => l.startsWith('Row 3'));
   assert.match(line, /2 dc in next st then sk 1/);
   assert.equal(Written.parseRow(line).width, 3);

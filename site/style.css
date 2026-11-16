@@ -63,3 +63,8 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .carryAdvice{color:#426b9f}.edLegend .k.carryAdvice{border-color:#426b9f;background:#edf3fa;text-align:center;font:bold 10px/12px sans-serif}
 
 .designHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.designReference{margin:0 0 8px;flex:0 0 auto;width:clamp(72px,18vw,112px);text-align:center}.designReference[hidden]{display:none}.designReference img{display:block;max-width:100%;max-height:112px;margin:0 auto 4px;object-fit:contain;border:1px solid #d4ccc1;border-radius:5px;background:#fff;image-rendering:pixelated}.designReference figcaption{font-size:.72rem}
+
+.rowPanel .row{gap:6px;margin:6px 0;align-items:center;flex-wrap:wrap}.rowPanel .lab{width:44px;font-weight:600;color:#2b2622}.rowPanel button{padding:6px 9px;font-size:.85rem}
+.rowPanel button:disabled{opacity:.4}.rowPanel .rowAll{border-top:1px solid #e3dbcf;padding-top:6px}.rowPanel .rowAll .lab{width:auto}
+.sugBox #sugNote{color:#2f6fd0;font-weight:600}.sugBox .lab{width:40px}
+.sugBox[hidden]{display:none}

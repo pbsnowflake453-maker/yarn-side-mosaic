@@ -4,6 +4,14 @@
   const { color, simulate } = root.Mosaic;
   const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
   const ADVICE = '#426b9f', ADVICE_TEXT = '2 = C + D carried (preference only)';
+  /* Split paragraphs into lines that fit maxW at the given font (measured on a scratch canvas). */
+  function wrapLines(paras, font, maxW) {
+    const g = mk(1, 1).getContext('2d'); g.font = font; const out = [];
+    for (const p of paras) { let line = '';
+      for (const w of p.split(' ')) { const t = line ? line + ' ' + w : w; if (line && g.measureText(t).width > maxW) { out.push(line); line = w; } else line = t; }
+      if (line) out.push(line); }
+    return out;
+  }
   function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
   function carryFlags(g, rows, x, centerY, cell) {
     const size = Math.max(3, Math.min(16, cell * .8));
@@ -73,6 +81,13 @@
       if (opts.mine && opts.mine[i][c]) { g.fillStyle = '#125765'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.arc(x + cell / 2, y + cell / 2, Math.max(1.5, cell * 0.16), 0, 2 * Math.PI); g.fill(); g.stroke(); }
     }
     drawGroups(g, opts.groups, c => c * cell + cell / 2, i => (H - 1 - i) * cell, cell);
+    // Suggested leans (not part of the design yet): blue dashed box around the stitches plus a blue symbol.
+    if (opts.suggest && opts.suggest.length) { const SG = F.map(r => r.map(() => 0)); g.save();
+      for (const [i, b, bits] of opts.suggest) { SG[i][b] = bits; const c0 = bits & 1 ? b - 1 : b, c1 = bits & 2 ? b + 1 : b, y = (H - 1 - i) * cell;
+        g.fillStyle = 'rgba(47,111,208,.14)'; g.fillRect(c0 * cell, y, (c1 - c0 + 1) * cell, Math.min(3, i + 1) * cell);
+        g.setLineDash([Math.max(2, cell / 4), Math.max(2, cell / 5)]); g.strokeStyle = '#2f6fd0'; g.lineWidth = Math.max(1.5, cell / 10);
+        g.strokeRect(c0 * cell + 1, y + 1, (c1 - c0 + 1) * cell - 2, Math.min(3, i + 1) * cell - 2); g.setLineDash([]); }
+      drawGroups(g, SG, c => c * cell + cell / 2, i => (H - 1 - i) * cell, cell, { ink: '#2f6fd0' }); g.restore(); }
     carryFlags(g, opts.adviceRows, W * cell + 3, i => (H - i - .5) * cell, cell);
     cv._cell = cell; cv._H = H; return cv;
   }
@@ -81,14 +96,19 @@
     const cell = opts.cell || 22, H = F.length, W = F[0].length, n = W + 2, SW = Math.round(cell * 0.8), L = (opts.carry ? 4 : 2.6) * cell + SW, top = 1.4 * cell;
     const A = opts.a || [250, 250, 250], B = opts.b || [25, 25, 25], rowRGB = opts.rowRGB || (r => (color(r) ? B : A));
     const legend = opts.legend || [], advice = opts.adviceRows && opts.adviceRows.length, adviceH = advice ? cell * .7 : 0, legH = (legend.length ? (legend.length + 1.5) * cell * 0.8 : 0) + adviceH;
-    const cv = mk(Math.round(2 * L - SW + n * cell), Math.round(top + (H + 1) * cell + 2.6 * cell + legH)), g = cv.getContext('2d');
+    const cvW = Math.round(2 * L - SW + n * cell), small = `${Math.round(cell * 0.42)}px sans-serif`, bold = `bold ${Math.round(cell * 0.55)}px sans-serif`;
+    // Notes under the chart wrap onto extra lines (never squeezed) so they stay readable on narrow charts.
+    const notes = ['Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.',
+      'X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
+        + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight dc beside it (both are dc, both show X, same stitch 2 rows down).' : '')];
+    const noteX = Math.min(L, cell), noteLines = wrapLines(notes, small, cvW - noteX - 4), lineH = cell * 0.5, extraH = Math.max(0, noteLines.length - 2) * lineH;
+    const cv = mk(cvW, Math.round(top + (H + 1) * cell + 2.6 * cell + extraH + legH)), g = cv.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
     const inkFor = c => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < 140 ? '#fff' : '#000');
     cv._geo = { top, cell, H, stripX: 2, stripW: SW };
     for (let r = 0; r <= H; r++) { const y = top + (H - r) * cell; // yarn strip (row 0 = chain, A yarn of row 1)
       g.fillStyle = css(r === 0 ? (opts.chainRGB || rowRGB(1)) : rowRGB(r)); g.fillRect(2, y + 1, SW - 4, cell - 2); g.strokeStyle = '#888'; g.strokeRect(2.5, y + 1.5, SW - 5, cell - 3);
       if (opts.selRow === r) { g.strokeStyle = '#c8102e'; g.lineWidth = 3; g.strokeRect(1.5, y + .5, SW - 3, cell - 1); g.lineWidth = 1; } }
-    const small = `${Math.round(cell * 0.42)}px sans-serif`, bold = `bold ${Math.round(cell * 0.55)}px sans-serif`;
     g.textBaseline = 'middle';
     const label = (r, y, ab) => {
       const Lr = L - SW;
@@ -118,13 +138,11 @@
     label(0, y0, 'A');
     g.font = small; g.textAlign = 'center'; g.fillStyle = '#000';
     for (let k = 0; k < n; k++) { const num = String(n - k), x = L + k * cell + cell / 2; g.fillText(num, x, top - cell * 0.45); g.fillText(num, x, y0 + cell * 1.45); }
-    g.textAlign = 'left'; g.fillText('Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.', L, y0 + cell * 2.05, cv.width - L - 4);
-    g.fillText('X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
-      + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight dc beside it (both are dc, both show X, same stitch 2 rows down).' : ''), L, y0 + cell * 2.55, cv.width - L - 4);
-    if (advice) adviceCaption(g, cv.width, y0 + cell * 3.15);
-    if (legend.length) { let y = y0 + cell * 3.2 + adviceH; g.font = bold; g.fillText('Color key', L, y); y += cell * 0.8; g.font = small;
-      for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(L, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(L + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
-        g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, L + cell * 1.2, y); y += cell * 0.8; } }
+    g.textAlign = 'left'; noteLines.forEach((t, k) => g.fillText(t, noteX, y0 + cell * 2.05 + k * lineH));
+    if (advice) adviceCaption(g, cv.width, y0 + cell * 3.15 + extraH);
+    if (legend.length) { let y = y0 + cell * 3.2 + extraH + adviceH; g.font = bold; g.fillText('Color key', noteX, y); y += cell * 0.8; g.font = small;
+      for (const e of legend) { g.fillStyle = css(e.rgb); g.fillRect(noteX, y - cell * 0.3, cell * 0.9, cell * 0.6); g.strokeStyle = '#666'; g.strokeRect(noteX + .5, y - cell * 0.3 + .5, cell * 0.9, cell * 0.6);
+        g.fillStyle = '#000'; g.fillText(e.text || `${e.hex.toUpperCase()}  ·  ${e.yarn} rows ${e.from}–${e.to}`, noteX + cell * 1.2, y); y += cell * 0.8; } }
     return cv;
   }
 
