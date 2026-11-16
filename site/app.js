@@ -205,6 +205,7 @@
     replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
     bindPaint(cv, D);
     $('dSuggestLeans').onclick = () => { if (!st.d) return; const D = derive(); const n = suggestLeans(D); changed(n ? `Suggested ${n} leaning stitch${n > 1 ? 'es' : ''} for curves.` : 'No new lean suggestions.'); };
+    $('dUndo').disabled = !st.hist.length; $('dFix').disabled = !D.n;
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
       ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Fix</b> to change the fewest squares. Your painted squares and Keep squares stay if at all possible.`
@@ -362,6 +363,16 @@
     const L = st.stripeFor === 'row' ? C.yarnOf(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
     note('colorNote', res.note || `From row ${st.selRow} up, ${L === 'C' || L === 'D' ? 'carried strand ' + L : 'the ' + L + ' yarn'} is ${hex}.`); }
   document.querySelectorAll('[data-stripe]').forEach(b => b.onclick = () => { st.stripeFor = b.dataset.stripe; document.querySelectorAll('[data-stripe]').forEach(x => x.classList.toggle('on', x === b)); });
+  /* Swap letters from selected row upward so the fixer sees the new role (A→C etc.). */
+  document.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => {
+    if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
+    const to = b.dataset.swap, from = C.yarnOf(st.selRow), d = st.d, H = d.P.length;
+    if (from === to) return note('colorNote', `Row ${st.selRow} is already ${from}.`);
+    push(); let n = 0;
+    for (let i = st.selRow - 1; i < H; i++) for (let c = 0; c < d.P[i].length; c++) if (d.P[i][c] === from) { d.P[i][c] = to; d.mine[i][c] = 1; n++; }
+    changed(`From row ${st.selRow} up, ${n} ${from} square${n === 1 ? '' : 's'} became ${to}. The fixer sees them as ${to} now.`);
+    note('colorNote', `Swapped ${from} → ${to} from row ${st.selRow} up (${n} squares).`);
+  });
   function drawBank() { const box = $('bank'); box.innerHTML = '';
     st.bank.forEach(hex => { const d = document.createElement('div'); d.className = 'bank-sw'; d.style.background = hex; d.title = hex; d.onclick = () => pick(hex);
       d.oncontextmenu = e => { e.preventDefault(); st.bank = st.bank.filter(x => x !== hex); C.saveBank(st.bank); drawBank(); }; box.appendChild(d); });
