@@ -29,16 +29,17 @@
 </div>
 <div id="designView" hidden>
 <section>
- <div class="dHead"><h2>Design</h2><span class="small" id="dSize"></span></div>
+ <div class="designHeader"><div class="dHead"><h2>Design</h2><span class="small" id="dSize"></span></div><figure class="designReference" id="designReference" hidden><img id="designReferenceImg" alt="Original image for reference"><figcaption class="small" id="designReferenceLabel">Original image</figcaption></figure></div>
  <div class="tools">
-  <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D"><i class="dot"></i>D</button><button class="sec" data-tool="keep">Keep</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
+  <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D"><i class="dot"></i>D</button><button class="sec" data-tool="cycle" title="Tap to cycle A→B→C→D">Cycle</button><button class="sec" data-tool="keep">Keep</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
   <div class="row"><span class="small lab">Lean</span><button class="sec gsym" data-tool="g1" title="2 dc in next st then sk 1">\|</button><button class="sec gsym" data-tool="g2" title="sk 1 then 2 dc in next st">|/</button><button class="sec gsym" data-tool="g3" title="sk 1 then 3 dc in next st then sk 1">\|/</button><button class="sec" data-tool="g0">No lean</button><label class="small chk"><input type="checkbox" id="showX"> Show X's</label></div>
-  <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button id="dFix" disabled>Fix</button><button class="sec" id="dOpts">More fix options</button><span class="zoom"><button class="sec" id="dOut" title="Smaller">&minus;</button><button class="sec" id="dIn" title="Bigger">+</button></span></div>
+  <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button id="dFix" disabled>Fix</button><button class="sec" id="dSuggestLeans">Suggest leans</button><button class="sec" id="dOpts">More fix options</button><span class="zoom"><button class="sec" id="dOut" title="Smaller">&minus;</button><button class="sec" id="dIn" title="Bigger">+</button></span></div>
+  <div class="row sugBox" id="sugBox" hidden><span class="small lab">Leans</span><span class="small" id="sugNote"></span><button class="sec" id="sugAll">Add all</button><button class="sec" id="sugHide">Hide</button></div>
   <div class="row fixSet"><span class="small lab">Fix may</span><label class="small chk"><input type="checkbox" id="fixNear" checked> use a C / D color a square touches</label><label class="small chk"><input type="checkbox" id="fixCarry"> carry a strand to keep the picture as drawn</label></div>
  </div>
  <p class="small dnote" id="dNote"></p>
  <div class="out" id="dWrap"><canvas id="dCv"></canvas></div>
- <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix</p>
+ <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix <span class="k carryAdvice">2</span>both C + D carried (preference only)</p>
  <div class="optsBox" id="optsBox" hidden><div class="row"><b>Fix options</b><span class="small" id="optsNote"></span><button class="sec" id="optsClose">Close</button></div><div class="cands" id="opts"></div></div>
  <details class="sizeBox"><summary>Rows &amp; columns</summary>
   <div class="row"><span class="small lab">Top</span><button class="sec" data-rows="top,1">+ row</button><button class="sec" data-rows="top,-1">− row</button><span class="small lab">Bottom</span><button class="sec" data-rows="bottom,2">+ 2 rows</button><button class="sec" data-rows="bottom,-2">− 2 rows</button></div>
@@ -47,18 +48,23 @@
   <p class="small">Rows at the bottom come in pairs so row 1 stays an A row and the stitches above don't shift.</p></details>
  <details class="sizeBox" open><summary>Yarn colors</summary>
   <div class="row"><label class="small hexLab">A <input type="color" id="colA"></label><label class="small hexLab">B <input type="color" id="colB"></label><label class="small hexLab">C <input type="color" id="colC"></label><label class="small hexLab">D <input type="color" id="colD"></label></div>
-  <p class="small">Stripes (changing A or B partway up) are set on the Chart tab below.</p></details>
+  <p class="small">To change a color partway up, or work a row in the other yarn, tap that row on the Chart tab below (<b>Selected row</b>).</p></details>
  <div class="row"><button class="sec" id="saveDesign">Save design as piece</button><button id="mkPdf">Make pattern PDF</button></div>
 </section>
 <section>
  <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Design preview</button><button data-tab="fabric">Fabric</button></nav>
  <p class="small" id="summary"></p>
+ <p class="small carryAdvice" id="carryLegend" hidden><b>2 at the row edge</b> = both C and D carried (preference only). Red cell outlines = stitch errors.</p>
  <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
-  <div class="bankBox"><div class="small"><b>Stripes.</b> Tap a row in the color strip at the left of the chart, then tap a color. The yarn you picked below changes from that row up. Any row can change.</div>
-   <div class="row"><span class="small">Change the color of:</span><button class="sec on" data-stripe="row">That row's yarn (A or B)</button><button class="sec" data-stripe="C">C</button><button class="sec" data-stripe="D">D</button></div>
+  <div class="bankBox rowPanel"><div class="small"><b>Selected row</b> · <span id="selRowInfo">Tap a row on the chart (the color strip at its left is easiest).</span></div>
+   <div class="row"><span class="small lab">Yarn</span><button class="sec rowNeed" id="yarnA">Work in A</button><button class="sec rowNeed" id="yarnB">Work in B</button><button class="sec rowNeed" id="yarnFlip">Flip A/B from here up</button></div>
+   <div class="row"><span class="small lab">Color</span><span class="small">From this row up, change</span><button class="sec on" data-stripe="row">its yarn (A/B)</button><button class="sec" data-stripe="C">C</button><button class="sec" data-stripe="D">D</button><span class="small">to:</span></div>
    <div class="row" id="bank"></div>
-   <div class="row"><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add</button><button class="sec" id="resetStripes">Remove stripes</button></div>
-   <p class="small note" id="colorNote"></p></div>
+   <div class="row"><span class="small lab"></span><input type="color" id="picker" class="vh"><input type="text" id="hex" placeholder="#hex" maxlength="7" size="8"><button class="sec" id="addHex">Add color</button></div>
+   <div class="row"><span class="small lab">Swap</span><span class="small">on this row, every</span><button class="sec on" data-from="A">A</button><button class="sec" data-from="B">B</button><button class="sec" data-from="C">C</button><button class="sec" data-from="D">D</button>
+     <span class="small">becomes</span><button class="sec rowNeed" data-swap="A">A</button><button class="sec rowNeed" data-swap="B">B</button><button class="sec rowNeed" data-swap="C">C</button><button class="sec rowNeed" data-swap="D">D</button></div>
+   <p class="small note" id="colorNote"></p>
+   <div class="row rowAll"><span class="small lab">Whole chart</span><button class="sec" id="yarnReset">Reset yarns to odd/even</button><button class="sec" id="resetStripes">Remove stripes</button></div></div>
   <div class="out"><canvas id="chartCv"></canvas></div></div>
  <div id="writtenTab" hidden><div class="row"><button class="sec" id="copyTxt">Copy to clipboard</button><button class="sec" id="dlTxt">Download .txt</button><span class="small" id="txtNote"></span></div><pre id="written" class="written"></pre></div>
  <div id="previewTab" hidden><div class="row"><button class="sec" id="dlPrev">Download preview PNG</button></div><div class="out"><canvas id="prevCv"></canvas></div></div>

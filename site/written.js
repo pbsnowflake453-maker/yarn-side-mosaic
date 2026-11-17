@@ -46,12 +46,12 @@
   const carried = (Y, r) => Y ? [...new Set(Y[r - 1].filter(v => v))].sort() : [];
   function rowString(X, r) { const row = X[r - 1]; let s = ''; for (let c = row.length - 1; c >= 0; c--) s += row[c] ? 'd' : 's'; return s; } // right to left
   function colorNames(plan) { const m = {}; for (const y of ['A', 'B']) plan[y].forEach((e, i) => { m[y + e.row] = { label: plan[y].length > 1 ? `${y}${i + 1}` : y, hex: e.hex }; }); return m; }
-  function colorFor(plan, r) { const y = r % 2 ? 'A' : 'B', list = plan[y]; let idx = 0; list.forEach((e, i) => { if (e.row <= r) idx = i; }); return { label: list.length > 1 ? `${y}${idx + 1}` : y, hex: list[idx].hex, change: idx > 0 && list[idx].row === r }; }
+  function colorFor(plan, r, yarnOf) { const y = yarnOf ? yarnOf(r) : (r % 2 ? 'A' : 'B'), list = plan[y]; let idx = 0; list.forEach((e, i) => { if (e.row <= r) idx = i; }); return { label: list.length > 1 ? `${y}${idx + 1}` : y, hex: list[idx].hex, change: idx > 0 && list[idx].row === r }; }
   function directions(X, plan, opts = {}) {
     plan = plan || C().defaultPlan(); const H = X.length, W = X[0].length, n = W + 2, L = [];
     L.push(opts.title || 'Overlay mosaic crochet pattern', '');
     L.push('NOTES', '- Worked flat, bottom up. Every row is worked right to left (RS facing). Cut yarn at the end of each row, leaving tails.',
-      '- Odd rows use yarn A, even rows use yarn B. The foundation chain is row 0, in A.',
+      '- Each row is worked in the yarn shown (A or B). By default odd rows are A and even rows are B; a row can be overridden. The foundation chain is row 0, in A.',
       '- BS = border stitch: sc through both loops at each end of the row.',
       '- sc = single crochet in back loop only.',
       '- dc = double crochet in front loop of the stitch two rows below, worked in front of the previous row (these are the X\'s on the chart).',
@@ -59,10 +59,12 @@
       ...(opts.G && opts.G.some(row => row.some(v => v)) ? ['- Leaning stitches (the slanted lines on the chart): "2 dc in next st then sk 1" (chart \\|) = work 2 dc into the front loop of the next stitch two rows below, then skip the next stitch\'s front loop. "sk 1 then 2 dc in next st" (chart |/) = skip one, then 2 dc into the next one. "sk 1 then 3 dc in next st then sk 1" (chart \\|/) = skip one, 3 dc into the next one, skip one. The stitch count stays the same.'] : []),
       ...(opts.Y && opts.Y.some(row => row.some(v => v)) ? ['- [C: …] = work these stitches with yarn C instead of the row\'s yarn: sc still goes in the back loop, dc still goes in the front loop two rows below. "Carry C" means hold C along the top of the row with the row\'s yarn and crochet over it, switching strands when the row says so.'] : []),
       `- Size: ${n} stitches (including BS) x ${H} rows plus chain.`, '', 'YARN');
-    for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const lbl = plan[y].length > 1 ? `${y}${i + 1}` : y; L.push(`- Color ${lbl}: ${e.hex} (from row ${e.row})`); });
+    const legend = C().legend(plan, H, opts.yarnOf || C().yarnOf);
+    for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const lbl = plan[y].length > 1 ? `${y}${i + 1}` : y, use = legend.find(x => x.yarn === y && x.idx === i);
+      if (use || i === 0) L.push(`- Color ${lbl}: ${e.hex} (${use && use.rows.length ? 'rows ' + C().formatRows(use.rows) : 'no chart rows'}${y === 'A' && i === 0 ? '; foundation chain' : ''})`); });
     strandList(opts.extras).forEach(e => { if (opts.Y && opts.Y.some(row => row.includes(e.k))) L.push(`- Color ${e.label}: ${e.hex} (carried strand${e.row > 1 ? `, from row ${e.row}` : ''})`); });
     L.push('', 'DIRECTIONS', `Row 0 (Color ${colorFor(plan, 1).label}): Ch ${n}.`);
-    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r), body = rowBody(X, r, opts.Y, opts.extras, opts.G), cr = carried(opts.Y, r).map(k => strandAt(opts.extras, k, r).label);
+    for (let r = 1; r <= H; r++) { const c = colorFor(plan, r, opts.yarnOf), body = rowBody(X, r, opts.Y, opts.extras, opts.G), cr = carried(opts.Y, r).map(k => strandAt(opts.extras, k, r).label);
       L.push(`Row ${r} (Color ${c.label}${c.change ? ', change to new color' : ''}${cr.length ? ', carry ' + cr.join(' and ') : ''}): BS, ${body}, BS. (${n} sts)`); }
     return L.join('\n');
   }

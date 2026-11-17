@@ -9,19 +9,21 @@
   const zeros = (h, w) => Array.from({ length: h }, () => new Array(w).fill(0));
   const clone = G => G.map(r => r.slice());
 
-  function check(T) {
-    const H = T.length, W = T[0].length, X = zeros(H, W), bad = [];
+  function check(T, colFn) {
+    const col = colFn || color, H = T.length, W = T[0].length, X = zeros(H, W), bad = [];
     for (let i = 0; i < H; i++) for (let c = W - 1; c >= 0; c--) {
-      if (T[i][c] !== color(i + 1)) {
+      if (T[i][c] !== col(i + 1)) {
         if (i + 1 >= H) bad.push([i + 1, c, 'top row cannot be covered']); else X[i + 1][c] = 1;
+        if (i + 1 < H && col(i + 2) !== T[i][c]) bad.push([i + 1, c, 'covering row uses the wrong yarn']);
       }
     }
     for (let i = 1; i < H; i++) for (let c = 0; c < W; c++) if (X[i][c] && X[i - 1][c]) bad.push([i + 1, c, 'X stacked on X']);
     return { X, bad };
   }
-  function simulate(X) {
+  function simulate(X, colFn) {
+    const col = colFn || color;
     const H = X.length, W = X[0].length, F = zeros(H, W);
-    for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) F[i][c] = (i + 1 < H && X[i + 1][c]) ? color(i + 2) : color(i + 1);
+    for (let i = 0; i < H; i++) for (let c = 0; c < W; c++) F[i][c] = (i + 1 < H && X[i + 1][c]) ? col(i + 2) : col(i + 1);
     return F;
   }
   /* side = empty columns added on each side; pad = add an empty top row when needed so the top row is an A row.
@@ -46,13 +48,15 @@
   }
   /* E = extra-strand mask (0 none, 1 = C, 2 = D): those cells are worked as an sc in the extra strand, so they must
      show their own row (no dc from above) and the cell under them must not need a dc (that dc would be the extra cell's stitch). */
-  function columnDP(T, c, P, lock, E) {
+  function columnDP(T, c, P, lock, E, colFn) {
+    const col = colFn || color;
     const H = T.length; let best = new Map([[false, { cost: 0, path: [] }]]);
     for (let i = 0; i < H; i++) {
       const r = i + 1, nxt = new Map();
       for (const [pm, st] of best) for (const v of [T[i][c], 1 - T[i][c]]) {
-        const m = v !== color(r);
+        const m = v !== col(r);
         if (m && pm) continue; if (m && i === H - 1) continue;
+        if (m && col(r + 1) !== v) continue;
         if (E && E[i][c] && (m || pm)) continue;
         const k = st.cost + cellCost(T, i, c, v, P, lock);
         if (!nxt.has(m) || k < nxt.get(m).cost) nxt.set(m, { cost: k, path: st.path.concat([v]) });
@@ -73,19 +77,21 @@
     }
     return n;
   }
-  function solve(motif, mults, bottom, protect, lock, extra, exact) {
+  function solve(motif, mults, bottom, protect, lock, extra, exact, yarn) {
     const sr = A => stretchRows(A, mults, bottom, exact ? 0 : 1, !exact);
     const T = sr(motif), P = sr(protect || motif.map(r => r.map(() => 0)));
     const L = lock ? sr(lock) : null;   // "keep exactly" squares, stretched like the motif
     const E = extra ? sr(extra) : null;
-    if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v) T[i][c] = color(i + 1); }));   // extra-strand squares sit in their own row
+    const rowYarn = yarn ? stretchRows(yarn.slice().reverse().map(v => [v]), mults, bottom, 0, !exact).map(r => r[0]) : null;
+    const col = r => rowYarn && rowYarn[r - 1] ? +(rowYarn[r - 1] === 'B') : color(r);
+    if (E) E.forEach((row, i) => row.forEach((v, c) => { if (v) T[i][c] = col(i + 1); }));
     const F = clone(T); let total = 0;
     for (let c = T[0].length - 1; c >= 0; c--) {
-      const res = columnDP(T, c, P, L, E); if (!res) return null;
+      const res = columnDP(T, c, P, L, E, col); if (!res) return null;
       total += res.cost; for (let i = 0; i < T.length; i++) F[i][c] = res.path[i];
     }
     total += 10 * Math.abs(components(F) - components(T));
-    return { cost: total, T, F, L, E, mults, bottom };
+    return { cost: total, T, F, L, E, mults, bottom, yarn: rowYarn };
   }
   function score(res, h) {
     const rows = res.mults.reduce((a, b) => a + b, 0), aspect = Math.abs(rows / h - 1);
@@ -96,7 +102,7 @@
   function findFixes(motif, opts = {}) {
     const h = motif.length, maxMult = opts.maxMult || 2, budget = opts.budget || (h > 60 ? 150 : 600), R = rng(opts.seed || 1);
     const maxAspect = opts.maxAspect == null ? 0.2 : opts.maxAspect, seen = new Map();
-    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock, opts.extra, opts.exact); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
+    const ev = (m, b) => { const key = m.join(',') + '|' + b; if (!seen.has(key)) { const r = solve(motif, m, b, null, opts.lock, opts.extra, opts.exact, opts.yarn); if (r) r.score = score(r, h); seen.set(key, r); } return seen.get(key); };
     const ones = new Array(h).fill(1);
     const bottoms = opts.exact ? [0] : [0, 1];   // exact: never add a row at the bottom (that would shift every row)
     for (const b of bottoms) ev(ones, b);
@@ -112,8 +118,9 @@
     const all = [...seen.values()].filter(Boolean).sort((a, b) => a.score - b.score), out = [];
     for (const r of all) { if (out.some(o => o.F.length === r.F.length && JSON.stringify(o.F) === JSON.stringify(r.F))) continue; out.push(r); if (out.length >= (opts.keep || 3)) break; }
     for (const r of out) {
-      const { X, bad } = check(r.F); r.X = X; r.valid = !bad.length;
-      const S = simulate(X); r.simOK = JSON.stringify(S) === JSON.stringify(r.F);
+      const col = row => r.yarn && r.yarn[row - 1] ? +(r.yarn[row - 1] === 'B') : color(row);
+      const { X, bad } = check(r.F, col); r.X = X; r.valid = !bad.length;
+      const S = simulate(X, col); r.simOK = JSON.stringify(S) === JSON.stringify(r.F);
       let add = 0, rem = 0; r.T.forEach((row, i) => row.forEach((v, c) => { if (v !== r.F[i][c]) v ? rem++ : add++; }));
       r.added = add; r.removed = rem; r.rows = r.F.length; r.width = r.F[0].length;
       r.stretched = r.mults.some(m => m > 1);
@@ -219,14 +226,31 @@
   }
 
   /* Cells (bottom-up F) that can't be worked: a mismatch in the top row, or two mismatches stacked in a column. */
-  function problemCells(F) {
-    const H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0, spots = 0;   // n = squares, spots = conflicts
-    const mis = (i, c) => F[i][c] !== color(i + 1);
+  function problemCells(F, colFn) {
+    const col = colFn || color, H = F.length, W = F[0].length, bad = zeros(H, W); let n = 0, spots = 0;
+    const mis = (i, c) => F[i][c] !== col(i + 1);
     for (let c = 0; c < W; c++) for (let i = 0; i < H; i++) if (mis(i, c)) {
       if (i === H - 1) { spots++; if (!bad[i][c]) n++; bad[i][c] = 1; }
+      if (i + 1 < H && col(i + 2) !== F[i][c]) { spots++; for (const q of [i, i + 1]) { if (!bad[q][c]) n++; bad[q][c] = 1; } }
       if (i > 0 && mis(i - 1, c)) { if (!(bad[i - 1][c] && i > 1 && mis(i - 2, c) && bad[i - 2][c])) spots++; if (!bad[i][c]) n++; if (!bad[i - 1][c]) n++; bad[i][c] = bad[i - 1][c] = 1; }
     }
     return { bad, n, spots };
+  }
+  /* Derive stitches without changing the requested picture. A covering dc must use
+     the requested yarn, not merely occupy a geometrically available square. */
+  function analyzeDesign(F, Y, opts = {}) {
+    const col = opts.color || color, H = F.length, W = F[0].length;
+    const X = check(F, col).X, pc = problemCells(F, col);
+    for (let i = 1; i < H; i++) for (let c = 0; c < W; c++) {
+      if (Y[i][c] && X[i][c]) {
+        pc.spots++; for (const q of [i - 1, i]) { if (!pc.bad[q][c]) pc.n++; pc.bad[q][c] = 1; }
+      }
+      // Prefer a carried dc only over the SAME carried color. Never invent a
+      // mismatch or cover a different letter to get a taller stitch.
+      if (Y[i][c] && Y[i][c] === Y[i - 1][c] && !X[i][c] && !X[i - 1][c]
+          && (!opts.strandColor || opts.strandColor(Y[i][c], i + 1) === opts.strandColor(Y[i][c], i))) X[i][c] = 1;
+    }
+    return Object.assign({ X }, pc);
   }
   /* Make a hand-edited chart workable with the fewest changes, keeping locked (hand-edited) cells if at all possible. */
   function refix(F, lock) {
@@ -247,19 +271,28 @@
   function leanAt(G, i, c) { const W = G[0].length;
     if (c + 1 < W && G[i][c + 1] & 1) return 1; if (c - 1 >= 0 && G[i][c - 1] & 2) return -1; return 0; }
   /* '' if the group is possible, otherwise why not (side = 'left' / 'right') */
-  function groupProblem(X, G, i, b, bits) {
+  function groupProblem(X, G, i, b, bits, opts = {}) {
     const H = X.length, W = X[0].length;
+    if (i < 2) return 'foundation';
     if (!X[i][b]) return 'center';
+    // An X alone does not establish a suitable anchor: a carried strand or
+    // stripe may occupy the shared base two rows down. This tool supports
+    // same-color anchors only, rather than guessing at cross-color shaping.
+    const at = opts.colorAt || ((r, c) => r + 1 < H && X[r + 1][c] ? color(r + 2) : color(r + 1));
+    const yarn = opts.yarnAt ? opts.yarnAt(i) : color(i + 1);
+    if (at(i - 2, b) !== yarn) return 'anchor';
+    if (at(i, b) !== yarn || at(i - 1, b) !== yarn) return 'path';
     for (const [bit, nb, side] of [[1, b - 1, 'left'], [2, b + 1, 'right']]) { if (!(bits & bit)) continue;
       if (nb < 0 || nb >= W) return 'edge:' + side;
+      if (at(i, nb) !== yarn) return 'yarn:' + side;
       if (X[i][nb] || G[i][nb]) return 'dc:' + side;
       if (i + 1 < H && X[i + 1][nb]) return 'above:' + side;
       if ((nb - 1 >= 0 && nb - 1 !== b && G[i][nb - 1] & 2) || (nb + 1 < W && nb + 1 !== b && G[i][nb + 1] & 1)) return 'taken:' + side; }
     return '';
   }
   /* drop groups that stopped being possible (after the chart changed); returns how many were dropped */
-  function cleanGroups(X, G) { let n = 0;
-    G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v)) n++; else G[i][b] = v; }));
+  function cleanGroups(X, G, opts) { let n = 0;
+    G.forEach((row, i) => row.forEach((v, b) => { if (!v) return; G[i][b] = 0; if (groupProblem(X, G, i, b, v, opts)) n++; else G[i][b] = v; }));
     return n; }
 
   /* Fix a design in place: fewest changes, keeping locked squares (hand-painted, keep exactly) if at all possible.
@@ -278,6 +311,7 @@
      A strand square must show its own row and can't have a dc right under it. New strand squares never make a row
      carry two different strands (rows that already do are left alone). */
   function fixColors(F, Y, opts = {}) {
+    const col = opts.color || color;
     const H = F.length, W = F[0].length, lock = opts.lock, ban = [...Array(H)].map(() => new Set());
     const rowHas = i => new Set(Y[i].filter(v => v));
     for (let i = 0; i < H; i++) { const s = rowHas(i); if (s.size > 1) { ban[i].add(1); ban[i].add(2); } else if (s.size === 1) ban[i].add(s.has(1) ? 2 : 1); }
@@ -286,11 +320,11 @@
       const nF = clone(F), nY = clone(Y); let ok = true;
       for (let c = 0; c < W && ok; c++) {
         let best = new Map([[false, { cost: 0, path: [] }]]);
-        for (let i = 0; i < H; i++) { const r = i + 1, own = color(r), nxt = new Map();
+        for (let i = 0; i < H; i++) { const r = i + 1, own = col(r), nxt = new Map();
           const put = (m, cost, step, st) => { const k = st.cost + cost; if (!nxt.has(m) || k < nxt.get(m).cost) nxt.set(m, { cost: k, path: st.path.concat([step]) }); };
           for (const [pm, st] of best) {
             if (Y[i][c]) { if (!pm) put(false, 0, [own, Y[i][c]], st); continue; }
-            for (const v of [F[i][c], 1 - F[i][c]]) { const m = v !== own; if (m && pm) continue; if (m && i === H - 1) continue; put(m, cellCost(F, i, c, v, null, lock), [v, 0], st); }
+            for (const v of [F[i][c], 1 - F[i][c]]) { const m = v !== own; if (m && pm) continue; if (m && (i === H - 1 || col(r + 1) !== v)) continue; put(m, cellCost(F, i, c, v, null, lock), [v, 0], st); }
             if (!pm && opts.choices) for (const ch of opts.choices(i, c)) if (!ban[i].has(ch.k)) put(false, ch.cost + (lock && lock[i][c] ? 40 : 0), [own, ch.k], st);
           }
           best = nxt; if (!best.size) break; }
@@ -310,6 +344,6 @@
     return Object.assign(out, { changed, lockedChanged, strands });
   }
 
-  root.Mosaic = { fixColors, fixDesign, groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
+  root.Mosaic = { analyzeDesign, fixColors, fixDesign, groupCols, leanAt, groupProblem, cleanGroups, problemCells, refix, color, check, simulate, stretchRows, solve, findFixes, components, crop, scale, autoSplit, thresholdMap, detectGrid, lum };
   if (typeof module !== 'undefined') module.exports = root.Mosaic;
 })(typeof window !== 'undefined' ? window : globalThis);

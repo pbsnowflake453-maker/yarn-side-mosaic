@@ -9,8 +9,18 @@
 
 ## Mosaic rules (engine.js)
 - Overlay mosaic, worked flat, RS rows only; row 0 = foundation chain (A). Odd rows = color A (background), even rows = color B.
-- A cell showing the opposite of its row color is a mismatch and needs an X (dc worked 2 rows down) directly above. Workable only if no two vertically adjacent mismatches in a column and none in the top row; the fixer edits the minimum pixels to comply.
-- Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (test_written.js).
+- Row yarn defaults can be overridden in `d.yarn` (bottom-up, row 1 at index 0). Preserve that schedule in saved pieces, Combine, Fix options, chart/preview rendering, and PDF/written exports. The foundation chain always stays A.
+- Carried C/D dc may cover the same carried letter and hex color below it, with no stacked dc. Derivation must never modify the requested picture to force a dc.
+- Lean groups are conservatively supported from row 3 onward with a same-color shared anchor two chart rows below. Validate actual colors with `groupProblem` context, including carried strands and stripes. Suggest only stepped corners, not arbitrary free neighbors; never certify the whole shaped fabric from the binary grid alone. Suggest leans only shows spots (blue, dashed); nothing goes into the design until Samantha taps a spot or Add all.
+- A cell showing the opposite of its row color is a mismatch and needs an X (dc worked 2 rows down) directly above. Workable only if no two vertically adjacent mismatches in a column, none in the top row, and the covering stitch actually uses the requested yarn; the fixer edits the minimum pixels to comply.
+- Display preference notices separately from stitch errors: both C and D carried on one row gets a blue `2` at the row edge, never red outlines on those squares. Red cells are reserved for actual stitch errors. Preserve this distinction in the editor, preview/fabric, PNGs, and PDF charts; preference notices must not block PDF export.
+- PDF chart row keys must show every yarn used in that row with color swatches and current stripe labels, including carried C/D, on both sides and on repeated rows across pages.
+- Design reference thumbnails are frozen when the design starts and saved with the piece. Use the original uploaded image when available; label legacy/combined input snapshots "Starting design" and never show an unrelated later upload.
+- Run `node tests/test_regressions.js` for self-contained engine, UI-handler, save/Combine, and PDF regression checks. Canvas stubs do not replace browser layout testing.
+- Row tools (row yarn, stripe color, letter swap) live together in the Chart tab's **Selected row** panel and stay disabled until a row is tapped.
+- Run `node tests/test_browser.js` (Playwright, site served on 8765) after UI changes.
+- Run `node tests/test_pdf_export.js` after PDF submission changes. Optional logo loading/decoding must not block pattern export; keep a text brand fallback and surface actual pattern-generation failures.
+- Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (covered in test_regressions.js).
 - Defaults: worsted #4, H/5 mm hook, gauge 15 sts x 15 rows = 4".
 
 ## Finishing plan (approved; see plans/finishing-plan.md)

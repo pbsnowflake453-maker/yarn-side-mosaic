@@ -25,6 +25,7 @@
     return { t, b, l, r }; }
   /* chart pieces keep their stitch pattern only if their bottom row lands on a row of the same kind (A row or B row) */
   function rowsOK(it) { const p = piece(it.pid); if (p.kind !== 'chart') return true;
+    if (p.yarn && p.yarn.some(Boolean)) return true;
     const { h } = dims(it), boardRow = st.board.h - (it.y + h) + 1, pieceRow = it.crop.b + 1; return (boardRow - pieceRow) % 2 === 0; }
 
   /* ---------- colors ---------- */
@@ -32,7 +33,11 @@
   /* a piece's colors as a plan (older pieces stored one hex per letter) */
   function pplan(p) { if (p.plan) return Cl().fullPlan(JSON.parse(JSON.stringify(p.plan)));
     const pl = Cl().defaultPlan(); if (p.hex) for (const L of 'ABCD') if (p.hex[L]) pl[L][0].hex = p.hex[L]; return pl; }
-  const pcolor = (p, L, pr) => Cl().colorOf(pplan(p), L, pr);
+  const pcolor = (p, L, pr) => {
+    const own = (p.yarn && p.yarn[pr - 1]) || Cl().yarnOf(pr);
+    const worked = p.kind === 'chart' && (L === 'A' || L === 'B') && own !== L ? pr + 1 : pr;
+    return Cl().colorOf(pplan(p), L, worked);
+  };
   const letterOf = (it, L0) => (it.remap && it.remap[L0]) || L0;
 
   /* ---------- composing ---------- */
@@ -50,8 +55,26 @@
       if (p.kind === 'chart' && p.groups && rowsOK(it)) p.groups.forEach(([t, c, bits]) => {
         const y = t - it.crop.t, x = it.flip ? Wf - 1 - c - it.crop.l : c - it.crop.l, b = it.flip ? ((bits & 1) << 1) | ((bits & 2) >> 1) : bits;
         if (y < 0 || y >= d.h || x < 0 || x >= d.w) return; const by = it.y + y, bx = it.x + x; if (by >= 0 && by < h && bx >= 0 && bx < w) groups.push([by, bx, b]); }); });
+    // A row has one working yarn shared by all visible design pieces. Preserve
+    // saved schedules, and ask rather than silently discard conflicting choices.
+    const yarn = new Array(h).fill(null), yarnConflicts = [];
+    for (let by = 0; by < h; by++) {
+      const wants = new Map(), R = h - by;
+      for (const ii of new Set(own[by].filter(ii => ii >= 0))) {
+        const it = items[ii], p = piece(it.pid); if (p.kind !== 'chart') continue;
+        const pr = fullH(p) - (by - it.y + it.crop.t);
+        const source = (p.yarn && p.yarn[pr - 1]) || Cl().yarnOf(pr);
+        const mapped = letterOf(it, source), L = 'AB'.includes(mapped) ? mapped : Cl().yarnOf(R);
+        if (!wants.has(L)) wants.set(L, []); wants.get(L).push(ii);
+      }
+      if (!wants.size) continue;
+      const key = `yarn:${R}`, choice = (st.board.choices || {})[key];
+      if (wants.size > 1 && !wants.has(choice)) yarnConflicts.push({ row: R, key, opts: [...wants].map(([L, items]) => ({ L, items })) });
+      yarn[R - 1] = wants.has(choice) ? choice : wants.keys().next().value;
+    }
+    const rowYarn = R => yarn[R - 1] || Cl().yarnOf(R);
     // what each yarn is asked for, row by row (rows counted from the bottom)
-    const ask = { A: {}, B: {}, C: {}, D: {} }, yarnOf = Cl().yarnOf;
+    const ask = { A: {}, B: {}, C: {}, D: {} }, yarnOf = rowYarn;
     for (let by = 0; by < h; by++) for (let bx = 0; bx < w; bx++) { const ii = own[by][bx]; if (ii < 0) continue; const L = G[by][bx], R = h - by;
       const Q = L === 'C' || L === 'D' ? R : yarnOf(R) === L || R + 1 > h ? R : R + 1;
       const m = ask[L][Q] = ask[L][Q] || new Map(); if (!m.has(col[by][bx])) m.set(col[by][bx], new Set()); m.get(col[by][bx]).add(ii); }
@@ -67,7 +90,7 @@
     for (let by = 0; by < h; by++) { const cI = new Set(), dI = new Set(); for (let bx = 0; bx < w; bx++) { if (G[by][bx] === 'C' && own[by][bx] >= 0) cI.add(own[by][bx]); if (G[by][bx] === 'D' && own[by][bx] >= 0) dI.add(own[by][bx]); }
       if (cI.size && dI.size) { const key = [...cI].sort() + '|' + [...dI].sort(); if (!strand.has(key)) strand.set(key, { rows: [], c: [...cI], d: [...dI] }); strand.get(key).rows.push(h - by); } }
     const first = items.find(it => piece(it.pid)), plan = Cl().planFromRows(rows, h, first ? pplan(piece(first.pid)) : null);
-    return { G, own, col, groups, plan, conflicts: [...open.values()], strand: [...strand.values()] };
+    return { G, own, col, groups, plan, yarn, yarnConflicts, conflicts: [...open.values()], strand: [...strand.values()] };
   }
   const span = rs => { rs = rs.slice().sort((a, b) => a - b); const out = []; let a = rs[0], b = rs[0];
     for (const r of rs.slice(1)) { if (r <= b + 2) b = r; else { out.push(a === b ? `${a}` : `${a}–${b}`); a = b = r; } } out.push(a === b ? `${a}` : `${a}–${b}`); return 'row' + (rs.length > 1 ? 's ' : ' ') + out.join(', '); };
@@ -102,6 +125,11 @@
     const mk = (t, cls, fn) => { const b = document.createElement('button'); b.className = cls || 'sec'; b.innerHTML = t; b.onclick = fn; return b; };
     const remapBtns = (ii, from) => { const it = st.board.items[ii], L0 = Object.keys(it.remap || {}).find(k => it.remap[k] === from) || from;
       return 'CD'.split('').filter(L => L !== from).map(L => mk(`Make ${name(ii)}'s ${from} a ${L}`, 'sec', () => { it.remap = Object.assign({}, it.remap, { [L0]: L }); saveAll(); draw(); })); };
+    B.yarnConflicts.forEach(c => { const d = document.createElement('div'); d.className = 'q';
+      d.textContent = `Row ${c.row}: design pieces use different working yarns. Choose the yarn for this board row; check the result in Design.`;
+      c.opts.forEach(o => d.appendChild(mk(`Use ${o.L} (${o.items.map(name).join(', ')})`, 'sec', () => {
+        st.board.choices = Object.assign({}, st.board.choices, { [c.key]: o.L }); saveAll(); draw();
+      }))); box.appendChild(d); });
     B.conflicts.forEach(c => { const d = document.createElement('div'); d.className = 'q';
       d.innerHTML = `<div class="small"><b>${c.L === 'C' || c.L === 'D' ? 'Strand ' + c.L : c.L + ' yarn'}, ${span(c.rows)}:</b> pieces want different colors. Pick one, or move a piece's color to a carried strand so both stay.</div>`;
       const r = document.createElement('div'); r.className = 'row';
@@ -112,7 +140,7 @@
       d.innerHTML = `<div class="small"><b>⚑ ${span(s.rows)}</b> would carry both C (${s.c.map(name).join(', ')}) and D (${s.d.map(name).join(', ')}). You carry one strand per row: switch one piece's strand, or leave it and it will be flagged in Design.</div>`;
       const r = document.createElement('div'); r.className = 'row'; s.d.forEach(ii => r.append(...remapBtns(ii, 'D').filter(b => b.textContent.endsWith('a C')))); s.c.forEach(ii => r.append(...remapBtns(ii, 'C').filter(b => b.textContent.endsWith('a D'))));
       d.append(r); box.appendChild(d); });
-    box.hidden = !B.conflicts.length && !B.strand.length; }
+    box.hidden = !B.conflicts.length && !B.strand.length && !B.yarnConflicts.length; }
   function drawSel() { const it = st.board.items[st.sel], box = $('selBox'); box.hidden = !it; if (!it) return;
     const p = piece(it.pid), d = dims(it); $('selName').textContent = p.name;
     // which letter each of the piece's colors uses on this board
@@ -138,7 +166,7 @@
       const info = document.createElement('div'); info.className = 'small'; info.textContent = `${W} × ${H} · ${p.kind === 'chart' ? 'design' : 'picture'}`;
       const add = document.createElement('button'); add.textContent = 'Add to board'; add.onclick = () => addItem(p);
       const open = document.createElement('button'); open.className = 'sec'; open.textContent = 'Open in Design';
-      open.onclick = () => root.MosaicApp.openDesign(p.rows, pplan(p), p.groups || [], `Opened “${p.name}”. Nothing has been changed.`);
+      open.onclick = () => root.MosaicApp.openDesign(p.rows, pplan(p), p.groups || [], `Opened “${p.name}”. Nothing has been changed.`, p.yarn, p.reference);
       const del = document.createElement('button'); del.className = 'sec'; del.textContent = 'Delete';
       del.onclick = () => { if (!confirm(`Delete "${p.name}"? It will also come off the board.`)) return; st.lib = st.lib.filter(q => q !== p);
         st.board.items = st.board.items.filter(it => it.pid !== p.id); st.sel = -1; saveAll(); drawLib(); draw(); };
@@ -203,8 +231,8 @@
     $('bClear').onclick = () => { if (st.board.items.length && !confirm('Take every piece off the board? Your saved pieces stay in My pieces.')) return; st.board.items = []; st.sel = -1; saveAll(); draw(); };
     $('bIn').onclick = () => { st.zoom = Math.min(4, st.zoom * 1.5); draw(); }; $('bOut').onclick = () => { st.zoom = Math.max(.5, st.zoom / 1.5); draw(); };
     $('useBoard').onclick = () => { const B = compose(); if (!st.board.items.length) return;
-      if (B.conflicts.length) { $('boardNote').innerHTML = `<span class="warn">Pick a color for ${B.conflicts.length} spot${B.conflicts.length > 1 ? 's' : ''} first</span> (below the board).`; $('colorBox').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-      root.MosaicApp.openDesign(B.G.map(r => r.join('')), B.plan, B.groups, 'Opened the board. Nothing has been changed: red squares are spots where pieces meet or overlap that can\'t be crocheted as drawn. Tap <b>Fix</b> when you\'re ready.'); };
+      if (B.conflicts.length || B.yarnConflicts.length) { $('boardNote').innerHTML = `<span class="warn">Pick a color for ${B.conflicts.length + B.yarnConflicts.length} spot${B.conflicts.length + B.yarnConflicts.length > 1 ? 's' : ''} first</span> (below the board).`; $('colorBox').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      root.MosaicApp.openDesign(B.G.map(r => r.join('')), B.plan, B.groups, 'Opened the board. Nothing has been changed: red squares are spots where pieces meet or overlap that can\'t be crocheted as drawn. Tap <b>Fix</b> when you\'re ready.', B.yarn); };
     window.addEventListener('resize', () => draw());
     drawLib(); draw();
   }
