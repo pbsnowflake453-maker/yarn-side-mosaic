@@ -63,7 +63,7 @@
     for (const y of ['A', 'B']) plan[y].forEach((e, i) => { const lbl = plan[y].length > 1 ? `${y}${i + 1}` : y, use = legend.find(x => x.yarn === y && x.idx === i);
       if (use || i === 0) L.push(`- Color ${lbl}: ${e.hex} (${use && use.rows.length ? 'rows ' + C().formatRows(use.rows) : 'no chart rows'}${y === 'A' && i === 0 ? '; foundation chain' : ''})`); });
     strandList(opts.extras).forEach(e => { if (opts.Y && opts.Y.some(row => row.includes(e.k))) L.push(`- Color ${e.label}: ${e.hex} (carried strand${e.row > 1 ? `, from row ${e.row}` : ''})`); });
-    L.push('', 'DIRECTIONS', `Row 0 (Color ${colorFor(plan, 1).label}): Ch ${n}.`);
+    L.push('', 'DIRECTIONS', `Row 0 (Color ${colorFor(plan, 1, () => 'A').label}): Ch ${n + 1}. Begin row 1 in the second chain from the hook; the extra chain does not count as a stitch.`);
     for (let r = 1; r <= H; r++) { const c = colorFor(plan, r, opts.yarnOf), body = rowBody(X, r, opts.Y, opts.extras, opts.G), cr = carried(opts.Y, r).map(k => strandAt(opts.extras, k, r).label);
       L.push(`Row ${r} (Color ${c.label}${c.change ? ', change to new color' : ''}${cr.length ? ', carry ' + cr.join(' and ') : ''}): BS, ${body}, BS. (${n} sts)`); }
     return L.join('\n');

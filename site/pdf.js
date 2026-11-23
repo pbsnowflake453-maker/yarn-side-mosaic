@@ -66,8 +66,11 @@
     function fit(fn) { const before = doc.getNumberOfPages(), p0 = page; for (K = 1; ; K -= 0.05) { fn(); if (doc.getNumberOfPages() === before + 1 || K < 0.8) break;
         while (doc.getNumberOfPages() > before) doc.deletePage(doc.getNumberOfPages()); page = p0; } K = 1; }
     /* leaning-stitch symbol: straight leg at cx, slanted legs from xl / xr (bits 1 / 2), top yT to base yB */
-    function gmark(cx, xl, xr, yT, yB, bits, col, lw) { stroke(col); doc.setLineWidth(lw);
-      line(cx, yT, cx, yB); if (bits & 1) line(xl, yT, cx, yB); if (bits & 2) line(xr, yT, cx, yB); }
+    function gmark(cx, xl, xr, yT, yB, bits, col, lw, clipBottom) { stroke(col); doc.setLineWidth(lw);
+      // Preserve the full stitch's slope when its anchor is on the previous page.
+      const t = clipBottom != null && yB < clipBottom ? (yT - clipBottom) / (yT - yB) : 1;
+      const leg = x => line(x, yT, x + (cx - x) * t, yT + (yB - yT) * t);
+      leg(cx); if (bits & 1) leg(xl); if (bits & 2) leg(xr); }
     function swatch(hex, label, mark) { ensure(20 * K); fill(hex); stroke(DARK); doc.setLineWidth(.5); rect(64, y - 3, 14, 14, true, true);
       const ik = lum(rgbOf(hex)) < 140 ? '#ffffff' : DARK;
       if (mark === 'X') { stroke(ik); doc.setLineWidth(1); line(66, y - 1, 76, y + 9); line(66, y + 9, 76, y - 1); }
@@ -133,7 +136,7 @@
     const splitTxt = ranges.length === 1 ? `The whole chart fits on one page (rows 1-${H}).` : `The chart is split over ${ranges.length} pages: rows ${joinList(rangeTxt)}. The first two rows on each page after the first repeat the top of the previous page, below a teal line, so you can find your place. Work each row once.`;
     const colorTxt = 'Use the complete set of colors printed beside each row; see the color key for yarn names and stripe changes.';
     const tip = tipRuns.length ? `Tip: check your work against the written row in the instructions, e.g. Row ${ex}: "${shortBody}". Counting from the right of the chart, you will see BS, then ` + tipRuns.map(r => `${r.n} ${r.t === 'd' ? 'X' : 'plain'} square${r.n > 1 ? 's' : ''}`).join(', then ') + '.' : '';
-    [`Start at the bottom. Row 0 is the foundation chain (ch ${n} in ${nm(Y[0])}); it is not drawn on the chart. Row 1 is the first charted row.`,
+    [`Start at the bottom. Row 0 is the foundation chain (ch ${n + 1} in ${nm(Y[0])}); it is not drawn on the chart. Begin row 1 in the second chain from the hook. The extra chain does not count as a stitch; each worked row has ${n} stitches. Row 1 is the first charted row.`,
       `Read every row from RIGHT to LEFT, the same direction you crochet. Stitch 1 is at the right edge and stitch ${n} is at the left edge; stitch numbers run across the top and bottom.`,
       `Row numbers are printed on both sides, next to color swatches and labels for every yarn used in that row (for example, A1 + C2 + D). The first color is the row yarn; additional colors are carried strands. ${colorTxt}`,
       'Plain square = sc in back loop only, in the color of that row.', 'X square = dc in front loop of the stitch two rows below, worked in front of the previous row.',
@@ -203,9 +206,10 @@
           fill('#edf3fa'); stroke('#426b9f'); doc.setLineWidth(.7); rect(xx, cy - s / 2, s, s, true, true);
           ink('#426b9f'); font('bold', Math.max(4, s * .7)); text('2', xx + s / 2, cy - s * .22, { align: 'center' }); }
         if (pi && r === r0 + 1) { stroke(TEAL); doc.setLineWidth(1.5); line(x0 - 30, yy + cs, x0 + gw + 30, yy + cs); } }
-      if (EX.G) for (let r = Math.max(2, r0); r <= r1; r++) EX.G[r - 1].forEach((v, b) => { if (!v) return;
-        const xc = c => x0 + (c + 1) * cs + cs / 2, yy = ybot + (r - r0) * cs, yT = yy + cs * 0.88, yB = r - 1 >= r0 ? yy - cs * 0.9 : yy + cs * 0.1;
-        gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#ffffff', Math.max(1.2, cs / 6)); gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#1a1a1a', Math.max(.6, cs / 14)); });
+      if (EX.G) for (let r = Math.max(3, r0); r <= r1; r++) EX.G[r - 1].forEach((v, b) => { if (!v) return;
+        // Match drawGroups on the site: row center to the center two rows below.
+        const xc = c => x0 + (c + 1) * cs + cs / 2, yy = ybot + (r - r0) * cs, yT = yy + cs * .5, yB = yy - cs * 1.5;
+        gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#ffffff', Math.max(1.2, cs / 6), ybot); gmark(xc(b), xc(b - 1), xc(b + 1), yT, yB, v, '#1a1a1a', Math.max(.6, cs / 14), ybot); });
       const top = ybot + (r1 - r0 + 1) * cs, nf = Math.max(2.8, Math.min(6.5, cs * 0.55)); ink(DARK); font('normal', nf);
       for (let k = 0; k < n; k++) { const s = String(n - k), xx = x0 + k * cs + cs / 2; if (cs < 6 && (n - k) % 5 && n - k !== 1 && n - k !== n) continue; text(s, xx, top + 3, { align: 'center' }); text(s, xx, ybot - nf - 2, { align: 'center' }); }
       const items = Y.map(e => [e.hex, null, yarnLine(e)]).concat(EX.Y ? Wr().strandList(EX.extras).filter(e => EX.Y.some(row => row.includes(e.k))).map(e => [e.hex, null, `Color ${e.label} (carried strand)`]) : []).concat([[Y[0].hex, 'X', 'X = dc in front 2 rows down'], [Y[0].hex, 'BS', 'BS = border stitch (both loops)']])
@@ -246,7 +250,7 @@
       if (proj === 'pillow') {
         y -= 4; sec('Pillow front and back');
         para(`Front: the finished chart panel, about ${fmtIn(panel.w)}" x ${fmtIn(panel.h)}". Knot each pair of tails at the row ends and trim to about 1"; they will be hidden inside the pillow.`, 54, 10.5, false);
-        para(`Back: with ${Y[0] ? nm(Y[0]) : 'color A'}, ch ${Wst}. Work rows of sc (or your favorite simple stitch) until the back matches the front's height, about ${R} rows. Fasten off.`, 54, 10.5, false);
+        para(`Back: with ${Y[0] ? nm(Y[0]) : 'color A'}, ch ${Wst + 1}. Begin in the second chain from the hook and work ${Wst} sc. Work rows of sc (or your favorite simple stitch) until the back matches the front's height, about ${R} rows. Fasten off.`, 54, 10.5, false);
         y -= 4; sec('Joining');
         para(`Hold the front and back wrong sides together. With ${bName}, sc through both layers around three sides, working 3 sc in each corner. Insert a pillow form about the size of your panel (a ${Math.ceil(Math.max(panel.w, panel.h))}" form, or stuffing), then sc the last side closed. Join and fasten off.`, 54, 10.5, false);
         para(`Finished pillow: about ${fmtIn(panel.w)}" x ${fmtIn(panel.h)}".`, 54, 10.5, false); }

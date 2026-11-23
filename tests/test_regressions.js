@@ -114,12 +114,64 @@ test('PDF, screen directions and chart use the same overridden yarn; chain stays
   assert.ok(!pdfText.some(t => t.includes('Odd rows (A) use')));
   a.selectors['[data-tab]'].find(e => e.dataset.tab === 'written').onclick();
   assert.match(a.ids.get('written').textContent, /Row 2 \(Color A\)/);
+  assert.match(a.ids.get('written').textContent, /Row 0 \(Color A\): Ch 5\. Begin row 1 in the second chain/);
+  assert.ok(pdfText.some(t => t.startsWith('Ch 5. Begin row 1 in the second chain')));
   a.selectors['[data-tab]'].find(e => e.dataset.tab === 'chart').onclick();
   assert.ok(a.ids.get('chartCv').ops.some(o => o[0] === 'fillText' && o[1] === 'B'));
   for (const tab of ['preview', 'fabric']) { a.selectors['[data-tab]'].find(e => e.dataset.tab === tab).onclick(); assert.equal(a.ids.get(tab + 'Tab').hidden, false); assert.equal(a.ids.get('chartTab').hidden, true); }
   a.click('dlPrev'); a.click('dlChart');
   const out = process.env.MOSAIC_TEST_OUTPUT;
   if (out) { fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'override.pdf'), Buffer.from(doc.output('arraybuffer'))); }
+});
+
+test('foundation has one extra chain without changing the chart or worked stitch counts', () => {
+  for (const w of [1, 26, 80]) {
+    const a = app(); a.open([ 'A'.repeat(w), 'B'.repeat(w), 'A'.repeat(w) ]);
+    const d = a.derive(), text = Written.directions(plain(d.X));
+    assert.match(text, new RegExp(`Row 0 \\(Color A\\): Ch ${w + 3}\\.`));
+    assert.match(text, /second chain from the hook; the extra chain does not count as a stitch/);
+    for (const line of text.split('\n').filter(l => /^Row [1-9]/.test(l))) {
+      const row = Written.parseRow(line); assert.equal(row.count, w + 2); assert.equal(row.width, w);
+    }
+    a.selectors['[data-tab]'].find(e => e.dataset.tab === 'chart').onclick();
+    assert.ok(a.ids.get('chartCv').ops.some(o => o[0] === 'fillText' && String(o[1]).includes(`Row 0 = ch ${w + 3} in A.`)));
+  }
+});
+
+test('PDF lean endpoints match the site, including clipped repeat rows on chart pages', () => {
+  const a = app(), events = [], H = 72, W = 10, X = zeros(H, W), G = zeros(H, W);
+  // Render-only fixture exercises all three symbols on every possible page boundary.
+  for (let i = 2; i < H; i++) { G[i][1] = 1; G[i][4] = 2; G[i][8] = 3; }
+  const { jsPDF } = require('../site/vendor/jspdf.umd.min.js');
+  a.window.jspdf = { jsPDF: function(opts) { const doc = new jsPDF(opts);
+    for (const method of ['text', 'rect', 'line']) { const original = doc[method].bind(doc);
+      doc[method] = (...args) => { events.push({ method, args, page: doc.internal.getCurrentPageInfo().pageNumber, color: doc.getDrawColor(), lw: doc.getLineWidth() }); return original(...args); }; }
+    return doc; } };
+  vm.runInContext(fs.readFileSync(path.join(site, 'pdf.js'), 'utf8'), a.context);
+  const doc = a.window.MosaicPDF.build({ X, F: M.simulate(X), G, plan: C.defaultPlan(), title: 'Lean alignment regression', project: 'pillow' });
+  const heads = events.filter(e => e.method === 'text' && /^Chart - Rows/.test(e.args[0])); assert.ok(heads.length > 1);
+  let full = 0, clipped = 0;
+  for (const head of heads) {
+    const [, r0s, r1s] = head.args[0].match(/Rows (\d+) to (\d+)/), r0 = +r0s, r1 = +r1s;
+    const cells = events.filter(e => e.page === head.page && e.method === 'rect' && e.args[2] === 12 && e.args[3] === 12 && e.args[4] === 'FD');
+    assert.equal(cells.length, (r1 - r0 + 1) * (W + 2));
+    const cs = 12, x0 = Math.min(...cells.map(e => e.args[0])), top = Math.min(...cells.map(e => e.args[1])), bottom = Math.max(...cells.map(e => e.args[1] + cs));
+    const actual = events.filter(e => e.page === head.page && e.method === 'line' && ['#1a1a1a', '#191919'].includes(e.color) && Math.abs(e.lw - cs / 14) < 1e-8).map(e => e.args);
+    const expected = [], screen = [], g = { beginPath() {}, moveTo(x, y) { this.start = [x, y]; }, lineTo(x, y) { if (this.strokeStyle === '#1a1a1a') screen.push([...this.start, x, y]); }, stroke() {} };
+    a.window.MosaicRender.drawGroups(g, G, c => x0 + (c + 1.5) * cs, i => top + (r1 - 1 - i) * cs, cs);
+    for (const [x1, y1, x2, y2] of screen) {
+      if (y1 < top || y1 > bottom) continue;
+      const t = y2 > bottom ? (bottom - y1) / (y2 - y1) : 1;
+      expected.push([x1, y1, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]);
+      if (t < 1) clipped++; else full++;
+    }
+    assert.equal(actual.length, expected.length);
+    actual.forEach((line, i) => line.forEach((v, j) => assert.ok(Math.abs(v - expected[i][j]) < 1e-7, `page ${head.page}, segment ${i}, coordinate ${j}`)));
+  }
+  assert.ok(full > 0 && clipped > 0, 'check full anchors and page-edge clipping');
+  const text = events.filter(e => e.method === 'text').map(e => String(e.args[0])).join(' ');
+  assert.match(text, /ch 13 in Color A/); assert.match(text, /Back: with Color A, ch 13\./);
+  if (process.env.MOSAIC_TEST_OUTPUT) { fs.mkdirSync(process.env.MOSAIC_TEST_OUTPUT, { recursive: true }); fs.writeFileSync(path.join(process.env.MOSAIC_TEST_OUTPUT, 'lean-alignment.pdf'), Buffer.from(doc.output('arraybuffer'))); }
 });
 
 test('PDF chart row keys include every carried color and the current stripe on each page', () => {

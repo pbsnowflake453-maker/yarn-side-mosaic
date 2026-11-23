@@ -98,7 +98,7 @@
     const legend = opts.legend || [], advice = opts.adviceRows && opts.adviceRows.length, adviceH = advice ? cell * .7 : 0, legH = (legend.length ? (legend.length + 1.5) * cell * 0.8 : 0) + adviceH;
     const cvW = Math.round(2 * L - SW + n * cell), small = `${Math.round(cell * 0.42)}px sans-serif`, bold = `bold ${Math.round(cell * 0.55)}px sans-serif`;
     // Notes under the chart wrap onto extra lines (never squeezed) so they stay readable on narrow charts.
-    const notes = ['Row 0 = foundation chain (A). Work bottom up, every row RIGHT to LEFT.',
+    const notes = [`Row 0 = ch ${n + 1} in A. Begin row 1 in the second chain from the hook; the extra chain is not a chart stitch. Work bottom up, every row RIGHT to LEFT.`,
       'X = dc in front 2 rows down. BS = border stitch.' + (opts.stitchRGB ? ' A shaded square is worked in that carried strand (C / D).' : '')
         + (opts.groups && opts.groups.some(r => r.some(v => v)) ? ' Slanted line = a dc leaning into the straight dc beside it (both are dc, both show X, same stitch 2 rows down).' : '')];
     const noteX = Math.min(L, cell), noteLines = wrapLines(notes, small, cvW - noteX - 4), lineH = cell * 0.5, extraH = Math.max(0, noteLines.length - 2) * lineH;
