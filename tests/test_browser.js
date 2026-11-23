@@ -16,6 +16,7 @@ const shot = async (p, name) => { if (OUT) { fs.mkdirSync(OUT, { recursive: true
     art.forEach((row, y) => [...row].forEach((ch, x) => { g.fillStyle = col[ch]; g.fillRect(x * s, y * s, s, s); })); return cv.toDataURL('image/png').split(',')[1]; });
   await p.setInputFiles('#file', { name: 'heart.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await p.waitForFunction(() => document.getElementById('detect').textContent.includes('Detected'));
+  for (const scale of [5, 6, 9]) assert.ok(await p.isVisible(`[data-s="${scale}"]`));
   await p.click('#auto4Btn'); await p.click('#startDesign'); await p.waitForSelector('#designView:not([hidden])');
   await p.click('#dFix'); assert.match(await p.textContent('#dNote'), /Fixed/);
 
@@ -56,6 +57,10 @@ const shot = async (p, name) => { if (OUT) { fs.mkdirSync(OUT, { recursive: true
 
   // Combine round trip
   await p.click('#saveDesign'); await p.click('[data-view="combine"]'); await p.click('#lib button:has-text("Add to board")');
+  const boardBeforeTile = await p.evaluate(() => JSON.stringify(window.MosaicCombine._st.board));
+  await p.click('#pTile'); assert.match(await p.textContent('#tileNote'), /Added \d+ cop/);
+  assert.ok(await p.isEnabled('#pUndoTile')); await shot(p, 'auto_tile');
+  await p.click('#pUndoTile'); assert.equal(await p.evaluate(() => JSON.stringify(window.MosaicCombine._st.board)), boardBeforeTile);
   await p.click('#bFit'); await p.click('#useBoard'); await p.waitForSelector('#designView:not([hidden])');
 
   assert.deepEqual(errs, [], 'no page errors'); console.log('PASS browser smoke test (phone width)'); await b.close();

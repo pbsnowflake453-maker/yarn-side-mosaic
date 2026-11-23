@@ -22,7 +22,7 @@
   <div class="row"><span class="small">Fill in for me:</span><button class="sec" id="autoBtn">Auto A/B</button><button class="sec" id="auto4Btn">Auto A/B/C/D</button><button class="sec" id="thrBtn">By brightness</button><button class="sec" id="mergeAuto">Merge look-alikes</button><button class="sec" id="mergePick">Merge two colors</button><button class="sec" id="impUndo" disabled>Undo</button></div>
   <p class="small note" id="palNote"></p>
   <div class="out"><canvas id="monoCv"></canvas></div>
-  <div class="row"><span class="small">Size:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button><span class="small">each square becomes 1, 2×2 or 3×3 squares</span></div>
+  <div class="row"><span class="small">Size:</span><button class="sec on" data-s="1">1×</button><button class="sec" data-s="2">2×</button><button class="sec" data-s="3">3×</button><button class="sec" data-s="5">5×</button><button class="sec" data-s="6">6×</button><button class="sec" data-s="9">9×</button><span class="small">Each square becomes a block of that size (5× = 5×5 squares).</span></div>
   <div class="row"><button id="startDesign">Start designing</button><button class="sec" id="savePic">Save as piece</button></div>
  </div>
 </section>
@@ -87,6 +87,8 @@
   <div class="row"><span class="small lab"></span><button class="sec" data-crop="l,1">left −</button><button class="sec" data-crop="l,-1">left +</button><button class="sec" data-crop="r,1">right −</button><button class="sec" data-crop="r,-1">right +</button></div>
   <div class="row" id="pLetters"></div>
   <div class="row"><button class="sec" id="pMirror">Mirror ↔</button><button class="sec" id="pFront">Bring to front</button><button class="sec" id="pBack">Send to back</button><button class="sec" id="pDup">Duplicate</button><button class="sec" id="pClear"></button><button class="sec" id="pDel">Remove</button></div>
+  <div class="row"><button id="pTile">Auto-tile board</button><button class="sec" id="pUndoTile" disabled>Undo tiling</button><span class="small">Repeat this piece in the free space using whole copies.</span></div>
+  <p class="small" id="tileNote" role="status" aria-live="polite"></p>
   <p class="small" id="selNote"></p></div>
  <div class="colorBox" id="colorBox" hidden></div>
  <div class="row"><button id="useBoard">Open board in Design</button><span class="small" id="boardNote"></span></div>

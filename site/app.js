@@ -142,12 +142,13 @@
   $('impUndo').onclick = () => { const h = st.impHist.pop(); if (!h) return; Object.assign(st.samp, { idx: h.idx, palette: h.palette, counts: h.counts }); st.role = h.role; st.bg = h.bg; st.selSw = -1; drawPalette(); note('palNote', 'Undone.'); };
   document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.scale = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); });
   const startPlan = () => { const p = C.defaultPlan(); for (const L of 'ABCD') p[L][0].hex = toHex(picRGB(L)); return p; };
+  function scaledPictureRows() { const s = st.scale, rows = [];
+    st.samp.idx.forEach(r => { const line = []; r.forEach(v => { for (let k = 0; k < s; k++) line.push(roleOf(v)); }); for (let k = 0; k < s; k++) rows.push(line.slice()); });
+    return rows; }
   $('startDesign').onclick = () => { if (!st.samp || st.role.some(r => !r)) return;
     if (st.d && st.hist.length && !confirm('Start a new design from this picture? Your current design will be replaced (save it as a piece in Combine first if you want to keep it).')) return;
-    const s = st.scale, rows = [];
-    st.samp.idx.forEach(r => { const line = []; r.forEach(v => { for (let k = 0; k < s; k++) line.push(roleOf(v)); }); for (let k = 0; k < s; k++) rows.push(line.slice()); });
-    openDesign(rows, startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Fix</b> when you want them worked out.', null, st.sourceReference); };
-  $('savePic').onclick = () => { if (!st.samp || st.role.some(r => !r)) return; window.MosaicCombine.save({ kind: 'picture', rows: st.samp.idx.map(r => r.map(v => roleOf(v)).join('')), plan: startPlan(), reference: st.sourceReference }); flash('savePic'); };
+    openDesign(scaledPictureRows(), startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Fix</b> when you want them worked out.', null, st.sourceReference); };
+  $('savePic').onclick = () => { if (!st.samp || st.role.some(r => !r)) return; window.MosaicCombine.save({ kind: 'picture', rows: scaledPictureRows().map(r => r.join('')), plan: startPlan(), reference: st.sourceReference }); flash('savePic'); };
 
   /* ================= Design ================= */
   /* rows: letter strings or arrays, top row first. groups: [[rowFromTop, col, bits]] */

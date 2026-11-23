@@ -5,6 +5,8 @@ A static, browser-only web app for **The Yarn Side** (Samantha Wallace's crochet
 - Live (Netlify): site `frolicking-snickerdoodle-7fb9e0` — **publish directory: `site/`**
 - No server, no build step. jsPDF is vendored in `site/vendor/`.
 
+Start offers 1×, 2×, 3×, 5×, 6× and 9× pixel enlargement. The chosen size applies both to Design and to saved picture pieces. In Combine, select a piece and use **Auto-tile board** to fill free space with whole repeats; **Undo tiling** restores the prior board until another board or library edit. Copies retain crop, mirror, transparency and color remapping. With Keep row pattern enabled, default-schedule chart pieces with odd heights get a spacer row between repeats. Existing pieces are preserved, partial edge copies are omitted, and tiling is limited to 2,000 total board pieces.
+
 ## Layout
 ```
 site/            <- publish this folder as-is

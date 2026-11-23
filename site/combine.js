@@ -6,8 +6,8 @@
   const LIB = 'yarnside.pieces.v1', BOARD = 'yarnside.board.v1';
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } };
   const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full or blocked: keep working in memory */ } };
-  const st = { lib: load(LIB, []), board: load(BOARD, { w: 40, h: 30, items: [] }), sel: -1, zoom: 1, drag: null };
-  const saveAll = () => { store(LIB, st.lib); store(BOARD, st.board); };
+  const st = { lib: load(LIB, []), board: load(BOARD, { w: 40, h: 30, items: [] }), sel: -1, zoom: 1, drag: null, tileUndo: null, tileMessage: '' };
+  const saveAll = () => { st.tileUndo = null; st.tileMessage = ''; store(LIB, st.lib); store(BOARD, st.board); };
   const piece = id => st.lib.find(p => p.id === id);
   const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -142,6 +142,7 @@
       d.append(r); box.appendChild(d); });
     box.hidden = !B.conflicts.length && !B.strand.length && !B.yarnConflicts.length; }
   function drawSel() { const it = st.board.items[st.sel], box = $('selBox'); box.hidden = !it; if (!it) return;
+    $('pUndoTile').disabled = !st.tileUndo; $('tileNote').textContent = st.tileMessage;
     const p = piece(it.pid), d = dims(it); $('selName').textContent = p.name;
     // which letter each of the piece's colors uses on this board
     const lb = $('pLetters'); lb.innerHTML = '<span class="small lab">Letters</span>'; const pl = pplan(p);
@@ -174,6 +175,29 @@
       card.append(cv, name, info, btns); box.appendChild(card); }); }
 
   /* ---------- editing ---------- */
+  function tileSelected() {
+    const b = st.board, it = b.items[st.sel]; if (!it || !piece(it.pid)) return;
+    const d = dims(it), p = piece(it.pid), keep = $('keepRows').checked && p.kind === 'chart' && !(p.yarn && p.yarn.some(Boolean));
+    if (keep && !rowsOK(it)) { st.tileMessage = 'Move this piece onto its row pattern before tiling.'; drawSel(); return; }
+    const stepX = d.w, stepY = d.h + (keep ? d.h % 2 : 0), mod = (v, n) => ((v % n) + n) % n;
+    // Mark existing pieces once; tiling never overwrites or duplicates an occupied area.
+    const occupied = Array.from({ length: b.h }, () => new Uint8Array(b.w));
+    b.items.forEach(item => { if (!piece(item.pid)) return; const size = dims(item);
+      for (let y = Math.max(0, item.y); y < Math.min(b.h, item.y + size.h); y++) occupied[y].fill(1, Math.max(0, Math.min(b.w, item.x)), Math.max(0, Math.min(b.w, item.x + size.w))); });
+    const spots = [];
+    for (let y = mod(it.y, stepY); y + d.h <= b.h; y += stepY) for (let x = mod(it.x, stepX); x + d.w <= b.w; x += stepX) {
+      let free = true;
+      for (let row = y; row < y + d.h && free; row++) for (let col = x; col < x + d.w; col++) if (occupied[row][col]) { free = false; break; }
+      if (free) spots.push({ x, y });
+      if (spots.length + b.items.length > 2000) { st.tileMessage = 'This would create more than 2,000 pieces. Use a smaller board or a larger repeat.'; drawSel(); return; }
+    }
+    if (!spots.length) { st.tileMessage = 'No free space for another whole copy. Enlarge the board to add more.'; drawSel(); return; }
+    const before = JSON.parse(JSON.stringify(b)), sel = st.sel;
+    spots.forEach(({ x, y }) => b.items.push({ ...JSON.parse(JSON.stringify(it)), x, y }));
+    saveAll(); st.tileUndo = { board: before, sel };
+    st.tileMessage = `Added ${spots.length} ${spots.length === 1 ? 'copy' : 'copies'}.` + (stepY > d.h ? ' A spacer row between repeats keeps the A/B row pattern.' : '');
+    draw();
+  }
   function addItem(p) { const crop = trimmed(p), it = { pid: p.id, x: 0, y: 0, crop, flip: false, clear: true }, d = dims(it), b = st.board;
     const n = b.items.length; it.x = Math.min(n * 2, Math.max(0, b.w - d.w)); it.y = Math.min(n * 2, Math.max(0, b.h - d.h));
     if (d.w > b.w) b.w = d.w; if (d.h > b.h) b.h = d.h;
@@ -218,6 +242,8 @@
     $('pBack').onclick = () => { const b = st.board, it = b.items.splice(st.sel, 1)[0]; if (!it) return; b.items.unshift(it); st.sel = 0; saveAll(); draw(); };
     $('pDup').onclick = () => { const b = st.board, it = b.items[st.sel]; if (!it) return; const d = dims(it), cp = JSON.parse(JSON.stringify(it));
       cp.x = Math.min(it.x + d.w, Math.max(0, b.w - d.w)); if (cp.x === it.x) cp.y = Math.min(it.y + 2, Math.max(0, b.h - d.h)); b.items.push(cp); st.sel = b.items.length - 1; saveAll(); draw(); };
+    $('pTile').onclick = tileSelected;
+    $('pUndoTile').onclick = () => { const undo = st.tileUndo; if (!undo) return; st.board = undo.board; st.sel = undo.sel; saveAll(); st.tileMessage = 'Tiling undone.'; draw(); };
     $('pClear').onclick = () => { const it = st.board.items[st.sel]; if (!it) return; it.clear = !it.clear; saveAll(); draw(); };
     $('pDel').onclick = () => { if (st.sel < 0) return; st.board.items.splice(st.sel, 1); st.sel = -1; saveAll(); draw(); };
     /* board size: rows are added or removed at the top so pieces keep their row from the bottom */

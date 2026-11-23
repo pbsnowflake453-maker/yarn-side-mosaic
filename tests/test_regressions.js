@@ -14,6 +14,75 @@ function test(name, fn) { fn(); checks++; console.log('PASS', name); }
 
 const app = require('./app_harness.js');
 
+test('5x, 6x and 9x enlarge every source pixel in Design and saved Combine pieces', () => {
+  for (const scale of [5, 6, 9]) {
+    const a = app(), input = [[0, 1], [2, 3]], ref = { src: 'data:image/png;base64,AQID', label: 'Original image' };
+    a.st.samp = { idx: input, palette: [[255, 255, 255], [0, 0, 0], [255, 0, 0], [0, 255, 0]], counts: [1, 1, 1, 1] };
+    a.st.role = ['A', 'B', 'C', 'D']; a.st.sourceReference = ref;
+    a.selectors['[data-s]'].find(b => +b.dataset.s === scale).onclick();
+    a.click('startDesign'); a.click('savePic');
+    const design = plain(a.st.d.P).reverse(), piece = a.window.MosaicCombine._st.lib.at(-1);
+    assert.equal(design.length, 2 * scale); assert.equal(design[0].length, 2 * scale);
+    assert.deepEqual(plain(piece.rows), design.map(r => r.join('')));
+    for (let y = 0; y < 2 * scale; y++) for (let x = 0; x < 2 * scale; x++) assert.equal(design[y][x], 'ABCD'[input[Math.floor(y / scale)][Math.floor(x / scale)]]);
+    assert.deepEqual(input, [[0, 1], [2, 3]]); assert.deepEqual(plain(piece.reference), ref);
+  }
+});
+
+function tileApp({ kind = 'picture', rows = ['ABC', 'BCD'], w = 9, h = 6, yarn, crop, flip = false, remap } = {}) {
+  const a = app(), combine = a.window.MosaicCombine, s = combine._st;
+  s.lib.push({ id: 'tile', kind, name: 'Repeat', rows, plan: C.defaultPlan(), yarn, groups: kind === 'chart' ? [[0, 1, 1]] : [] });
+  s.board = { w, h, items: [{ pid: 'tile', x: 0, y: 0, crop: crop || { t: 0, b: 0, l: 0, r: 0 }, flip, clear: false, remap }] };
+  s.sel = 0; a.ids.get('keepRows').checked = true; combine.init(); return { a, combine, s };
+}
+
+test('auto-tile fills whole repeats, saves the board, skips occupied space and undoes exactly', () => {
+  const { a, combine, s } = tileApp();
+  s.lib.push({ id: 'other', name: 'Other', kind: 'picture', rows: ['DDD', 'DDD'], plan: C.defaultPlan() });
+  s.board.items.push({ pid: 'other', x: 3, y: 2, crop: { t: 0, b: 0, l: 0, r: 0 }, clear: false });
+  s.board.choices = { existing: 'choice' }; const before = plain(s.board), beforeG = plain(combine.compose().G);
+  a.click('pTile'); assert.equal(s.board.items.length, 9); assert.match(a.ids.get('tileNote').textContent, /Added 7 copies/);
+  assert.equal(a.ids.get('pUndoTile').disabled, false);
+  const output = plain(combine.compose().G);
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 9; x++) assert.equal(output[y][x], y >= 2 && y < 4 && x >= 3 && x < 6 ? 'D' : ['ABC', 'BCD'][y % 2][x % 3]);
+  assert.deepEqual(JSON.parse(a.storage.get('yarnside.board.v1')), plain(s.board));
+  a.click('pTile'); assert.equal(s.board.items.length, 9, 'running it twice adds no duplicates');
+  a.click('pUndoTile'); assert.deepEqual(plain(s.board), before); assert.deepEqual(plain(combine.compose().G), beforeG);
+  assert.deepEqual(JSON.parse(a.storage.get('yarnside.board.v1')), before); assert.equal(a.ids.get('pUndoTile').disabled, true);
+});
+
+test('auto-tile preserves crop, mirror, remapping, row schedules and lean groups', () => {
+  const { a, combine, s } = tileApp({ kind: 'chart', rows: ['AAAAA', 'ABBCA', 'ABBBA', 'AAAAA'], w: 9, h: 9, crop: { t: 1, b: 0, l: 1, r: 1 }, flip: true, remap: { C: 'D' }, yarn: ['A', 'B', 'A', 'B'] });
+  s.lib[0].groups = [[1, 2, 1]];
+  const snapshot = plain(s.board.items[0]); a.click('pTile');
+  assert.equal(s.board.items.length, 9);
+  for (const it of s.board.items) { const { x, y, ...settings } = plain(it), { x: ox, y: oy, ...original } = snapshot; assert.deepEqual(settings, original); assert.ok(x + 3 <= 9 && y + 3 <= 9); }
+  const B = combine.compose(); assert.equal(B.groups.length, 9); assert.ok(B.groups.every(g => g[2] === 2), 'mirrored lean direction retained');
+  assert.deepEqual(plain(B.yarn), ['A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'A']);
+  assert.equal(s.board.items[0].remap.C, 'D');
+  s.board.items[1].crop.l = 0; assert.equal(s.board.items[0].crop.l, 1, 'copies have independent crop objects');
+});
+
+test('auto-tile respects A/B rows for odd-height motifs and keeps partial edge repeats out', () => {
+  const { a, s } = tileApp({ kind: 'chart', rows: ['BAB', 'BAB', 'AAA'], w: 10, h: 10 });
+  s.board.items[0].y = 1; a.click('pTile'); assert.equal(s.board.items.length, 6);
+  assert.ok(s.board.items.every(it => [1, 5].includes(it.y) && it.x + 3 <= 10));
+  assert.match(a.ids.get('tileNote').textContent, /spacer row/);
+  for (const it of s.board.items) assert.equal((10 - (it.y + 3)) % 2, 0);
+  a.click('pUndoTile'); a.ids.get('keepRows').checked = false; a.click('pTile');
+  assert.ok(s.board.items.some(it => it.y === 4), 'without row alignment, repeats can touch');
+  // A later board edit must not be lost to an old tiling snapshot.
+  a.click('pMirror'); assert.equal(a.ids.get('pUndoTile').disabled, true);
+  const edited = plain(s.board); a.click('pUndoTile'); assert.deepEqual(plain(s.board), edited);
+});
+
+test('auto-tile refuses an off-row source or excessive copy count without changing the board', () => {
+  const off = tileApp({ kind: 'chart', rows: ['BAB', 'BAB', 'AAA'], w: 10, h: 10 }), before = plain(off.s.board);
+  off.a.click('pTile'); assert.deepEqual(plain(off.s.board), before); assert.match(off.a.ids.get('tileNote').textContent, /onto its row pattern/);
+  const big = tileApp({ rows: ['B'], w: 400, h: 400 }), original = plain(big.s.board);
+  big.a.click('pTile'); assert.deepEqual(plain(big.s.board), original); assert.match(big.a.ids.get('tileNote').textContent, /2,000/);
+});
+
 test('carried dc never mutates the picture or covers a different letter', () => {
   const a = app(); a.open(['B', 'B', 'C']); const d = a.derive();
   assert.equal(d.n, 0); assert.deepEqual(plain(d.F), [[1], [1], [0]]);
