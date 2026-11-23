@@ -15,8 +15,8 @@ function setup(fetchImage) {
     doc.text = (s, ...args) => { text.push(String(s)); return original(s, ...args); };
     doc.save = name => { saved.push({ doc, name }); return doc; }; return doc; } };
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../site/pdf.js'), 'utf8'), a.context);
-  a.window.MosaicRender.drawPreview = () => ({ width: 2, height: 2, toDataURL: () => preview });
   a.open(['AAA', 'BBB', 'AAA']);
+  a.window.MosaicRender.drawPreview = () => ({ width: 2, height: 2, toDataURL: () => preview });
   for (const [id, value] of Object.entries({ pdfTitle: 'Export check', pdfNotes: '', pdfIdeas: '', pdfProject: 'chart', pdfBorder: 'A' })) a.ids.get(id).value = value;
   a.click('mkPdf');
   return { ...a, saved, text, messages, decodes: () => imageDecodes, submit: () => a.ids.get('pdfForm').onsubmit({ preventDefault() {} }) };

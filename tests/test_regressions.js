@@ -86,7 +86,7 @@ test('auto-tile refuses an off-row source or excessive copy count without changi
 test('carried dc never mutates the picture or covers a different letter', () => {
   const a = app(); a.open(['B', 'B', 'C']); const d = a.derive();
   assert.equal(d.n, 0); assert.deepEqual(plain(d.F), [[1], [1], [0]]);
-  a.open(['B', 'C']); assert.ok(a.derive().n > 0); a.click('dFix'); assert.equal(a.derive().n, 0);
+  a.open(['B', 'C']); assert.ok(a.derive().n > 0); a.fix(); assert.equal(a.derive().n, 0);
   a.open(['C', 'C', 'C']); assert.deepEqual(plain(a.derive().X), [[0], [1], [0]]);
   a.st.plan.C.push({ row: 2, hex: '#0000ff' }); assert.equal(a.derive().X[1][0], 0, 'a dc must not overwrite a different stripe color');
 });
@@ -94,9 +94,9 @@ test('carried dc never mutates the picture or covers a different letter', () => 
 test('row overrides validate actual covering yarn, and Fix clears all trouble', () => {
   const a = app(); a.open(['B', 'A']); a.st.selRow = 2; a.click('yarnA'); assert.ok(a.derive().n > 0);
   assert.deepEqual(plain(a.derive().target(0, 0)), [26, 26, 26], 'editor retains the requested B');
-  a.click('dFix'); assert.equal(a.derive().n, 0);
+  a.fix(); assert.equal(a.derive().n, 0);
   a.open(['A', 'A', 'A']); a.st.selRow = 3; a.click('yarnB'); assert.ok(a.derive().n > 0);
-  a.click('dFix'); assert.equal(a.derive().n, 0); a.click('dUndo'); assert.ok(a.derive().n > 0);
+  a.fix(); assert.equal(a.derive().n, 0); a.click('dUndo'); assert.ok(a.derive().n > 0);
 });
 
 test('Suggest leans only shows spots; nothing changes until Add all, which is undoable', () => {
@@ -277,7 +277,7 @@ test('Design keeps its original reference through edits, new uploads, saves, and
   a.click('startDesign'); assert.equal(a.ids.get('designReference').hidden, false);
   assert.equal(a.ids.get('designReferenceImg').src, original.src);
   a.st.sourceReference = { src: 'data:image/png;base64,BAUG', label: 'Original image' };
-  a.click('dFix'); a.click('dIn'); assert.equal(a.ids.get('designReferenceImg').src, original.src);
+  a.fix(); a.click('dIn'); assert.equal(a.ids.get('designReferenceImg').src, original.src);
   a.click('saveDesign'); const p = a.window.MosaicCombine._st.lib[0]; assert.deepEqual(plain(p.reference), original);
   // Exercise the actual saved-piece Open in Design handler.
   const card = a.ids.get('lib').children.at(-1), button = card.children.at(-1).children.find(e => e.textContent === 'Open in Design');

@@ -17,16 +17,19 @@
 - PDF chart row keys must show every yarn used in that row with color swatches and current stripe labels, including carried C/D, on both sides and on repeated rows across pages.
 - Design reference thumbnails are frozen when the design starts and saved with the piece. Use the original uploaded image when available; label legacy/combined input snapshots "Starting design" and never show an unrelated later upload.
 - Run `node tests/test_regressions.js` for self-contained engine, UI-handler, save/Combine, and PDF regression checks. Canvas stubs do not replace browser layout testing.
+- Run `node tests/test_usability.js` for named-project autosave/resume, storage failures, Undo/Redo, pan/preview modes, fix review and repeat layouts. Autosave is device-local; never claim cloud sync. Preserve all design layers and original references when restoring projects.
+- Review fix must not change the current design until Apply fix. A canceled or stale proposal must leave current edits untouched. Keep this behavior in UI-handler and browser tests.
 - Row tools (row yarn, stripe color, letter swap) live together in the Chart tab's **Selected row** panel and stay disabled until a row is tapped.
 - Run `node tests/test_browser.js` (Playwright, site served on 8765) after UI changes.
 - Run `node tests/test_pdf_export.js` after PDF submission changes. Optional logo loading/decoding must not block pattern export; keep a text brand fallback and surface actual pattern-generation failures.
 - Written directions use sc / dc with repeats as (…) xN; they must round-trip through the parser (covered in test_regressions.js).
 - Defaults: worsted #4, H/5 mm hook, gauge 15 sts x 15 rows = 4".
+- The foundation chains one more than the worked stitch count; begin row 1 in the second chain. The extra chain is not a chart stitch.
 
 ## Finishing plan (approved; see plans/finishing-plan.md)
 - Size comes from the chart (no size picker). Samantha picks the project type in the PDF dialog: **Blanket, Pillow, Wall hanging, Chart only** (bags later). W = sts across incl. border stitches, R = rows incl. chain; generic text with counts swapped in.
 - **Envelope border**: knot tail pairs and trim ~1"; base round of loose surface sl st (~W top/bottom, R per side, 1 per row end); back flap in back loops (hdc, ch 2 corners; rnd 2 with (hdc, ch 2, hdc) corners); front flap in the other loops; join flaps with sc enclosing tails, 3 sc in corners. Adds ~1"/side: finished ≈ (W·4/15+2)" x (R·4/15+2)".
 - **Border color** choice: Color A, Color B, or "your own color".
-- **Pillow**: back panel ch W, rows to match R; join WS together with sc, 3 sc corners; insert form before closing.
+- **Pillow**: back panel ch W+1, work W sc beginning in the second chain, rows to match R; join WS together with sc, 3 sc corners; insert form before closing.
 - **Wall hanging**: rod pocket ~6 rows sc across the top, fold and sew; or evenly spaced tabs.
 - Still pending: bags, per-color yarn estimate, Etsy link.

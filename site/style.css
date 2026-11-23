@@ -68,3 +68,47 @@ button.sec.on{background:#125765;color:#fff}canvas.painting{touch-action:none;cu
 .rowPanel button:disabled{opacity:.4}.rowPanel .rowAll{border-top:1px solid #e3dbcf;padding-top:6px}.rowPanel .rowAll .lab{width:auto}
 .sugBox #sugNote{color:#2f6fd0;font-weight:600}.sugBox .lab{width:40px}
 .sugBox[hidden]{display:none}
+
+/* Keep the working surfaces and everyday actions close together. */
+[hidden]{display:none!important}
+main{max-width:1440px}
+header{background:#125765}
+button,button.on{background:#125765}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #216fa4;outline-offset:3px}
+button:disabled{cursor:default}
+input[type=text],select{font:inherit;padding:9px 10px;border:1px solid #bbb;border-radius:7px;max-width:100%}
+.small{font-size:.875rem}
+.projectBar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;border-bottom:1px solid #ddd;padding-bottom:12px;margin-bottom:12px}
+.projectBar label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:180px}.projectBar input{width:100%}
+#projectList{max-width:min(360px,75vw);min-width:150px}
+.tools{position:sticky;top:57px;z-index:4;background:#edf3f2;border:1px solid #d4e1de}
+.tools button{min-height:42px}.tools summary,.repeatTools summary,.editingHelp summary{cursor:pointer;font-weight:600;padding:9px 0}
+.tools details{border-top:1px solid #d4e1de;margin-top:6px}
+.workspaceSwitch{display:flex;gap:8px;margin:10px 0}.workspaceSwitch button{min-height:44px}
+.editWorkspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.editWorkspace>*{min-width:0}.simulationPane h3{font-size:1rem;margin:0 0 8px}.simulationPane p{margin:8px 0}
+.canvasViewport{height:min(62vh,640px);overflow:auto;background:#f6f8f7;border:1px solid #d4e1de;border-radius:8px;overscroll-behavior:contain}
+.canvasViewport canvas{display:block;max-width:none;height:auto;touch-action:none;image-rendering:auto;margin:0 auto}
+.designReference img{width:100%}
+#dCv{cursor:crosshair;image-rendering:pixelated}#dCv.panMode,#livePreviewCv{cursor:grab}.canvasViewport canvas:active{cursor:grabbing}
+.editingHelp{border-top:1px solid #ddd}.editingHelp p{font-size:.95rem;line-height:1.5}
+.fixDialog{max-width:980px;width:95%;max-height:90vh;overflow:auto}.fixDialog::backdrop{background:#182e36a6}
+.fixComparison{display:grid;grid-template-columns:1fr 1fr;gap:16px}.fixComparison>div{min-width:0}.fixComparison h3{font-size:1rem}
+.fixComparison canvas{width:100%;max-width:100%;height:auto}.fixComparison .out{max-height:55vh;overflow:auto}
+.fixDialog>.row{position:sticky;bottom:0;background:#fff;padding:8px 0}
+.combineWorkspace{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.combineWorkspace .boardWrap{max-height:72vh;min-width:0}.combineWorkspace .selBox{position:sticky;top:65px;max-height:80vh;overflow:auto}
+.repeatTools{border-top:1px solid #ddd}.repeatTools .row{gap:10px}.repeatTools label{display:flex;flex-direction:column;gap:5px}.repeatTools label.chk{flex-direction:row}
+.repeatTools input{width:84px}
+@media(max-width:760px){
+ main{padding:8px}section{padding:10px}.small{font-size:.875rem}
+ .views{gap:5px}.views button{min-height:44px}.tools{top:61px;padding:6px}
+ .tools button,.selBox button,.rowPanel button,.roles button,button{min-height:44px;min-width:44px;font-size:.9rem}
+ .tools .row{gap:6px}.tools .lab{width:auto}.tools .dot{width:16px;height:16px}.tools>.row:first-child>.lab{display:none}.tools button.lt{padding:7px 8px;gap:4px}
+ .tools details[open]{max-height:40vh;overflow:auto}
+ .editWorkspace{display:block}.editWorkspace[data-mode=edit] .simulationPane{display:none}.editWorkspace[data-mode=preview] #dWrap{display:none}
+ .canvasViewport{height:58vh}.simulationPane h3{display:none}.workspaceSwitch button{flex:1}
+ .combineWorkspace{display:flex;flex-direction:column}.combineWorkspace .selBox{position:static;max-height:none;order:-1;width:100%;margin:0}.combineWorkspace .boardWrap{width:100%;max-height:60vh}
+ .fixComparison{grid-template-columns:1fr}.fixComparison .out{max-height:30vh}
+ .projectBar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.projectBar label{grid-column:1/-1;min-width:0}.projectBar button{white-space:nowrap;justify-self:start}
+}

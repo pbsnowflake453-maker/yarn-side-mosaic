@@ -11,7 +11,7 @@
     img: null, sourceReference: null, det: null, samp: null, role: [], letterHex: {}, selSw: -1, showLetters: false, bg: 0, scale: 1, mergeMode: false, mergeFrom: null, impHist: [],
     // Design: P = letters, bottom row first (row 1 = index 0). G = leaning groups, K = keep exactly,
     // mine = squares painted by hand, auto = squares the fixer changed.
-    d: null, hist: [], tool: 'B', showX: false, zoom: 1, opts: [],
+    d: null, hist: [], redo: [], tool: 'B', showX: false, zoom: 1, opts: [], interaction: 'paint', pane: 'edit', pan: { x: 0, y: 0 }, fixPreview: null,
     plan: C.defaultPlan(), bank: C.loadBank(), selRow: null, stripeFor: 'row', fixNear: true, fixCarry: false, tab: 'chart', view: 'start'
   };
   const replace = (id, cv) => { const old = $(id); cv.id = id; old.replaceWith(cv); return cv; };
@@ -19,6 +19,7 @@
   const zeros = (H, W) => [...Array(H)].map(() => new Array(W).fill(0));
   const copy2 = A => A.map(r => r.slice());
   const note = (id, html) => { $(id).innerHTML = html; };
+  let workspace = null;
 
   /* ================= Views ================= */
   function setView(v) { st.view = v; document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === v));
@@ -147,15 +148,16 @@
     return rows; }
   $('startDesign').onclick = () => { if (!st.samp || st.role.some(r => !r)) return;
     if (st.d && st.hist.length && !confirm('Start a new design from this picture? Your current design will be replaced (save it as a piece in Combine first if you want to keep it).')) return;
-    openDesign(scaledPictureRows(), startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Fix</b> when you want them worked out.', null, st.sourceReference); };
+    openDesign(scaledPictureRows(), startPlan(), null, 'Started from your picture. Nothing has been changed: red squares are spots that can\'t be crocheted as drawn. Tap <b>Review fix</b> to see proposed changes.', null, st.sourceReference); };
   $('savePic').onclick = () => { if (!st.samp || st.role.some(r => !r)) return; window.MosaicCombine.save({ kind: 'picture', rows: scaledPictureRows().map(r => r.join('')), plan: startPlan(), reference: st.sourceReference }); flash('savePic'); };
 
   /* ================= Design ================= */
   /* rows: letter strings or arrays, top row first. groups: [[rowFromTop, col, bits]] */
   function openDesign(rows, colors, groups, msg, yarn, reference) {
+    if (workspace && !workspace.newProject()) return false;
     const H = rows.length, W = rows[0].length, P = []; for (let i = H - 1; i >= 0; i--) P.push([...rows[i]]);
     const G = zeros(H, W); (groups || []).forEach(([t, c, b]) => { const i = H - 1 - t; if (i >= 0 && i < H && c >= 0 && c < W) G[i][c] = b; });
-    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: Array.from({ length: H }, (_, i) => yarn && /^[AB]$/.test(yarn[i]) ? yarn[i] : null) }; st.hist = []; st.opts = []; st.sug = []; $('optsBox').hidden = true; st.selRow = null;
+    st.d = { P, G, K: zeros(H, W), mine: zeros(H, W), auto: zeros(H, W), linked: {}, yarn: Array.from({ length: H }, (_, i) => yarn && /^[AB]$/.test(yarn[i]) ? yarn[i] : null) }; st.hist = []; st.redo = []; st.opts = []; st.sug = []; st.fixPreview = null; st.zoom = 1; st.pan = { x: 0, y: 0 }; $('optsBox').hidden = true; st.selRow = null;
     st.plan = toPlan(colors);
     st.d.reference = validReference(reference) || validReference(startingReference());
     const lost = cleanAll(); setView('design'); note('dNote', msg + (lost ? ` ${lost} leaning group${lost > 1 ? 's' : ''} didn't fit and came out.` : '')); $('dNote').dataset.keep = 1; render();
@@ -219,12 +221,30 @@
   const snap = () => { const d = st.d; return { P: copy2(d.P), G: copy2(d.G), K: copy2(d.K), mine: copy2(d.mine), auto: copy2(d.auto), yarn: (d.yarn || []).slice(), linked: { ...d.linked }, plan: JSON.parse(JSON.stringify(st.plan)) }; };
   function restore(h) { const { plan, ...design } = h; Object.assign(st.d, design); if (plan) st.plan = plan; }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  function push(h = snap()) { st.hist.push(h); if (st.hist.length > 200) st.hist.shift(); }
+  function push(h = snap()) { st.redo = []; st.hist.push(h); if (st.hist.length > 200) st.hist.shift(); }
   function changed(msg) { const lost = cleanAll(); if (lost) msg = (msg ? msg + ' ' : '') + `${lost} leaning group${lost > 1 ? 's' : ''} came out because the stitches under ${lost > 1 ? 'them' : 'it'} changed. Undo brings ${lost > 1 ? 'them' : 'it'} back.`;
     if (msg) { note('dNote', msg); $('dNote').dataset.keep = 1; } render(); }
 
   /* ---------- the editor canvas ---------- */
+  function savePan(wrap) {
+    st.pan = { x: wrap.scrollLeft / Math.max(1, wrap.scrollWidth - wrap.clientWidth) || 0, y: wrap.scrollTop / Math.max(1, wrap.scrollHeight - wrap.clientHeight) || 0 };
+  }
+  function placeViewport(wrap, cv) {
+    const available = wrap.clientWidth || $('dWrap').clientWidth || $('livePreviewWrap').clientWidth || 620;
+    const fit = Math.min(Math.max(100, available - 4) / cv.width, (window.innerHeight || 800) * .6 / cv.height);
+    cv.classList.toggle('zoomed', true); cv.style.width = Math.max(1, Math.round(cv.width * fit * st.zoom)) + 'px';
+    wrap.scrollLeft = st.pan.x * Math.max(0, wrap.scrollWidth - wrap.clientWidth); wrap.scrollTop = st.pan.y * Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+    wrap.onscroll = () => { if (!wrap.clientWidth) return; savePan(wrap); if (workspace) workspace.autosave(); };
+  }
+  function bindPan(cv, wrap) { let drag = null;
+    cv.onpointerdown = e => { e.preventDefault(); cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, left: wrap.scrollLeft || 0, top: wrap.scrollTop || 0 }; };
+    cv.onpointermove = e => { if (!drag) return; wrap.scrollLeft = drag.left + drag.x - e.clientX; wrap.scrollTop = drag.top + drag.y - e.clientY; savePan(wrap); };
+    cv.onpointerup = cv.onpointercancel = () => { drag = null; if (workspace) workspace.autosave(); };
+  }
+  function setPane(pane) { savePan($(st.pane === 'edit' ? 'dWrap' : 'livePreviewWrap')); st.pane = pane; render(); }
   function render() { if (!st.d) return; renderReference(); syncLinked(); const d = st.d, D = derive();
+    $('editWorkspace').dataset.mode = st.pane;
+    if (st.fixPreview && !same(st.fixPreview.before, snap())) { st.fixPreview = null; $('fixDlg').close(); }
     const cell = Math.max(6, Math.min(24, Math.floor(Math.min(620, ($('dWrap').clientWidth || 620) - 4) / Math.max(D.W, 1))));
     st.sug = liveSuggestions(D); $('sugBox').hidden = !st.sug.length; $('sugNote').textContent = st.sug.length ? `${st.sug.length} suggested lean${st.sug.length > 1 ? 's' : ''} (blue)` : '';
     const cv = Rn.drawEdit(D.F, { cell, cellRGB: D.target, bad: D.bad, adviceRows: D.two, mine: d.K, auto: d.auto, groups: d.G, suggest: st.sug });
@@ -232,16 +252,23 @@
       const isLean = (i, c) => d.G[i] && ((c > 0 && d.G[i][c - 1] & 2) || (c + 1 < D.W && d.G[i][c + 1] & 1) || d.G[i][c]);
       D.X.forEach((row, i) => row.forEach((v, c) => { if (!v && !isLean(i, c)) return; const x = c * k, y = (D.H - 1 - i) * k, rgb = D.vis(i, c);
         g.strokeStyle = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) < 140 ? '#fff' : '#1a1a1a'; g.beginPath(); g.moveTo(x + p, y + p); g.lineTo(x + k - p, y + k - p); g.moveTo(x + k - p, y + p); g.lineTo(x + p, y + k - p); g.stroke(); })); }
-    replace('dCv', cv); cv.classList.toggle('zoomed', st.zoom > 1); cv.style.width = st.zoom > 1 ? Math.round(cv.width * st.zoom) + 'px' : '';
-    bindPaint(cv, D);
+    replace('dCv', cv); placeViewport($('dWrap'), cv);
+    cv.classList.toggle('panMode', st.interaction === 'pan');
+    if (st.interaction === 'pan') bindPan(cv, $('dWrap')); else bindPaint(cv, D);
+    const simulation = replace('livePreviewCv', Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), noLabel: true, bad: D.bad, adviceRows: D.two }));
+    placeViewport($('livePreviewWrap'), simulation); bindPan(simulation, $('livePreviewWrap'));
+    $('editWorkspace').dataset.mode = st.pane;
+    [['showEditor', 'edit'], ['showSimulation', 'preview']].forEach(([id, pane]) => { $(id).classList.toggle('on', st.pane === pane); $(id).setAttribute('aria-pressed', String(st.pane === pane)); });
+    $('quickPreview').textContent = st.pane === 'edit' ? 'Simulation' : 'Pixel editor';
+    [['paintMode', 'paint'], ['panMode', 'pan']].forEach(([id, mode]) => { $(id).classList.toggle('on', st.interaction === mode); $(id).setAttribute('aria-pressed', String(st.interaction === mode)); });
     $('dSuggestLeans').onclick = () => { if (!st.d) return; st.sug = suggestLeans(derive()); const n = st.sug.length;
       note('dNote', n ? `<b>Found ${n} spot${n > 1 ? 's' : ''}</b> where a leaning stitch could smooth a corner (blue, dashed). Nothing has been added: tap a blue spot to add that one, or tap <b>Add all</b>.` : 'No supported corner shapes found for new leans.'); $('dNote').dataset.keep = 1; render(); };
     $('sugAll').onclick = () => { const L = liveSuggestions(derive()); addSuggestions(L, `<b class="ok">✔ Added</b> ${L.length} leaning stitch${L.length > 1 ? 'es' : ''}. Undo takes ${L.length > 1 ? 'them' : 'it'} out.`); };
     $('sugHide').onclick = () => { st.sug = []; render(); };
-    $('dUndo').disabled = !st.hist.length; $('dFix').disabled = !D.n;
+    $('dUndo').disabled = !st.hist.length; $('dRedo').disabled = !st.redo.length; $('dFix').disabled = !D.n;
     $('dSize').textContent = `${D.W} × ${D.H} squares · chart ${D.W + 2} sts (with border stitches) × ${D.H} rows + chain`;
     if (!$('dNote').dataset.keep) note('dNote', (D.n
-      ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Fix</b> to change the fewest squares. Your painted squares and Keep squares stay if at all possible.`
+      ? `<b class="warn">✘ ${D.spots} trouble spot${D.spots > 1 ? 's' : ''}</b> (red): squares that can't be crocheted as drawn. Paint around them, or tap <b>Review fix</b> to compare the proposed changes. Painted and protected squares stay if at all possible.`
         + (D.bad[D.H - 1].some(v => v) ? ' <br>The top row has squares that can\'t be covered (nothing above them). Adding a row at the top, or changing those squares to the row\'s yarn, usually clears this.' : '')
       : (any(d.G) ? '<b class="ok">✔ Base chart is workable.</b> Diagonal stitches reshape the pixel edges; review the written groups before crocheting.' : '<b class="ok">✔ Workable.</b> Every square can be crocheted as shown.'))
       );
@@ -252,6 +279,7 @@
     ['A', 'B', 'C', 'D'].forEach(L => { const hx = st.plan[L][0].hex; $('col' + L).value = hx; document.querySelectorAll(`[data-tool="${L}"] .dot`).forEach(e => { e.style.background = hx; }); });
     $('carryLegend').hidden = !D.two.length;
     renderOut(D);
+    if (workspace) workspace.autosave();
   }
   /* tap / drag on the editor */
   function bindPaint(cv, D) { const d = st.d, H = D.H, k = cv._cell; let down = false, last = '', before = null;
@@ -296,14 +324,19 @@
 
   /* tools */
   const HELP = { A: 'Tap or drag to paint A (background).', B: 'Tap or drag to paint B (contrast).', C: 'Tap or drag to paint C, a strand carried along the row. Can be sc or dc in that strand when the geometry allows.', D: 'Tap or drag to paint D, a second carried strand. Can be sc or dc when possible.', cycle: 'Tap to cycle the letter: A → B → C → D → A. Good for quick phone edits.',
-    keep: 'Tap or drag over squares that must stay exactly as they are when you tap Fix (teal dots).', unkeep: 'Tap or drag over teal dots to remove them.',
+    keep: 'Tap or drag over squares that must stay exactly as they are when reviewing a fix (teal dots).', unkeep: 'Tap or drag over teal dots to remove them.',
     g1: 'Tap a dc (an X, or the square right under it). The stitch to its left leans into the same stitch two rows down: \\|.', g2: 'Tap a dc. The stitch to its right leans in: |/.', g3: 'Tap a dc. The stitches on both sides lean in: \\|/.', g0: 'Tap a leaning group to take it out.' };
   document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { st.tool = b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', x === b));
     if (st.tool[0] === 'g' && st.tool !== 'g0' && !st.showX) { st.showX = true; $('showX').checked = true; }
     note('dNote', HELP[st.tool]); $('dNote').dataset.keep = 1; render(); });
   $('showX').onchange = () => { st.showX = $('showX').checked; render(); };
-  $('dUndo').onclick = () => { const h = st.hist.pop(); if (!h) return; restore(h); note('dNote', 'Undone.'); $('dNote').dataset.keep = 1; render(); };
-  $('dIn').onclick = () => { st.zoom = Math.min(4, st.zoom * 1.5); render(); }; $('dOut').onclick = () => { st.zoom = Math.max(1, st.zoom / 1.5); render(); };
+  $('dUndo').onclick = () => { const h = st.hist.pop(); if (!h) return; st.redo.push(snap()); restore(h); note('dNote', 'Undone.'); $('dNote').dataset.keep = 1; render(); };
+  $('dRedo').onclick = () => { const h = st.redo.pop(); if (!h) return; st.hist.push(snap()); restore(h); note('dNote', 'Redone.'); $('dNote').dataset.keep = 1; render(); };
+  $('dIn').onclick = () => { st.zoom = Math.min(8, st.zoom * 1.5); render(); }; $('dOut').onclick = () => { st.zoom = Math.max(1, st.zoom / 1.5); render(); };
+  $('dFit').onclick = () => { st.zoom = 1; st.pan = { x: 0, y: 0 }; render(); };
+  $('paintMode').onclick = () => { st.interaction = 'paint'; render(); }; $('panMode').onclick = () => { st.interaction = 'pan'; render(); };
+  $('showEditor').onclick = () => setPane('edit'); $('showSimulation').onclick = () => setPane('preview');
+  $('quickPreview').onclick = () => setPane(st.pane === 'edit' ? 'preview' : 'edit');
   /* Fix: fewest changes. Besides switching A and B it can (b) turn a square into a C / D color it touches, and,
      when Carry is on, (a) keep a square's look by working it in a carried strand of that color. One strand per row. */
   $('dFix').onclick = () => { const d = st.d, D = derive(), H = D.H, W = D.W, lock = d.mine.map((r, i) => r.map((v, c) => (v || d.K[i][c] ? 1 : 0)));
@@ -315,16 +348,28 @@
       const own = ownColor(i), k = carryOn[own]; if (k && D.F[i][c] !== own) out.push({ k, cost: 1.5 });
       return out; };
     const res = M.fixColors(D.F, D.Y, { lock, choices, color: r => ownColor(r - 1) }); if (!res) return note('dNote', 'No workable fix found. Try painting around the red squares.');
-    push(); let carried = new Set();
+    const before = snap(), candidate = JSON.parse(JSON.stringify(before)); let carried = new Set();
     res.F.forEach((row, i) => row.forEach((v, c) => { const y = res.Y[i][c]; if (v === D.F[i][c] && y === D.Y[i][c]) return;
-      d.P[i][c] = y ? 'CD'[y - 1] : v ? 'B' : 'A'; d.auto[i][c] = 1; d.mine[i][c] = 0; if (y && (y === carryOn[0] || y === carryOn[1]) && !used.includes(y)) carried.add(y); }));
+      candidate.P[i][c] = y ? 'CD'[y - 1] : v ? 'B' : 'A'; candidate.auto[i][c] = 1; candidate.mine[i][c] = 0; if (y && (y === carryOn[0] || y === carryOn[1]) && !used.includes(y)) carried.add(y); }));
     // a carried strand made by Fix takes the color of the yarn it stands in for: B's color on A rows, A's on B rows
-    carried.forEach(k => { st.d.linked['CD'[k - 1]] = k === carryOn[0] ? 'B' : 'A'; }); syncLinked();
+    carried.forEach(k => { const L = 'CD'[k - 1], from = k === carryOn[0] ? 'B' : 'A'; candidate.linked[L] = from;
+      candidate.plan[L] = candidate.plan[from].map((e, i) => ({ row: i === 0 ? 1 : Math.max(1, e.row - 1), hex: e.hex })); });
     const msg = `<b class="ok">✔ Fixed.</b> Changed ${res.changed} square${res.changed === 1 ? '' : 's'} (outlined orange)` + (res.strands ? `, ${res.strands} of them now in a carried strand` : '')
-      + (res.lockedChanged ? `, including ${res.lockedChanged} you painted or kept, because they couldn't be worked as drawn.` : '; everything you painted or kept stayed.')
+      + (res.lockedChanged ? `, including ${res.lockedChanged} you painted or protected, because they couldn't be worked as drawn.` : '; everything you painted or protected stayed.')
       + (carried.size ? ` Carried strand${carried.size > 1 ? 's' : ''} ${[...carried].map(k => 'CD'[k - 1]).join(' and ')} use${carried.size > 1 ? '' : 's'} the same yarn as ${[...carried].map(k => (k === carryOn[0] ? 'B (on A rows)' : 'A (on B rows)')).join(' and ')}.` : '')
       + (st.fixCarry && !free.length ? ' Carrying was on, but C and D are both used in this design, so there was no free strand to carry.' : '') + ' Undo puts it back.';
-    changed(msg); };
+    st.fixPreview = { before, candidate, msg };
+    const affected = candidate.P.map((row, i) => row.map((L, c) => +(L !== before.P[i][c])));
+    $('fixSummary').textContent = `${res.changed} square${res.changed === 1 ? '' : 's'} would change.` + (res.lockedChanged ? ` ${res.lockedChanged} painted or protected squares must change to make the design workable.` : ' Painted and protected squares are preserved.');
+    const show = (id, state, auto) => { const box = $(id); box.innerHTML = '';
+      box.appendChild(Rn.drawEdit(state.P, { cell: Math.max(2, Math.min(16, Math.floor(400 / W))), auto, cellRGB: (i, c) => {
+        const L = state.P[i][c], own = state.yarn[i] || (M.color(i + 1) ? 'B' : 'A'); return C.hexToRgb(C.colorOf(state.plan, L, 'CD'.includes(L) || own === L ? i + 1 : i + 2)); } })); };
+    show('fixBefore', before); show('fixAfter', candidate, affected); $('fixDlg').showModal(); };
+  $('fixApply').onclick = () => { const review = st.fixPreview; if (!review) return;
+    if (!same(review.before, snap())) { st.fixPreview = null; $('fixDlg').close(); return; }
+    push(review.before); restore(review.candidate); st.fixPreview = null; $('fixDlg').close(); changed(review.msg); };
+  $('fixCancel').onclick = () => { st.fixPreview = null; $('fixDlg').close(); };
+  $('fixDlg').oncancel = () => { st.fixPreview = null; };
   $('fixNear').onchange = () => { st.fixNear = $('fixNear').checked; }; $('fixCarry').onchange = () => { st.fixCarry = $('fixCarry').checked; };
   /* fix options that also try stretching rows (taller design, fewer changed squares) */
   $('dOpts').onclick = () => { const d = st.d, D = derive(), top = r => r.slice().reverse();
@@ -381,8 +426,8 @@
     d.G = d.G.map(r => r.slice().reverse().map(v => ((v & 1) << 1) | ((v & 2) >> 1))); changed('Mirrored left to right.'); };
 
   /* ---------- yarn colors ---------- */
-  ['A', 'B'].forEach(L => { $('col' + L).oninput = () => { st.plan[L][0].hex = $('col' + L).value; render(); }; });
-  ['C', 'D'].forEach(L => { $('col' + L).oninput = () => { delete st.d.linked[L]; st.plan[L][0].hex = $('col' + L).value; render(); }; });
+  ['A', 'B'].forEach(L => { $('col' + L).oninput = () => { push(); st.plan[L][0].hex = $('col' + L).value; render(); }; });
+  ['C', 'D'].forEach(L => { $('col' + L).oninput = () => { push(); delete st.d.linked[L]; st.plan[L][0].hex = $('col' + L).value; render(); }; });
 
   /* ================= Live outputs ================= */
   const hasY = D => any(D.Y), hasG = () => any(st.d.G);
@@ -412,7 +457,7 @@
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { st.tab = b.dataset.tab; render(); });
   function pick(hex) { if (st.selRow == null) return note('colorNote', 'Tap a row in the color strip at the left of the chart first.');
-    const L = st.stripeFor === 'row' ? ownYarn(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); st.plan = res.plan; render();
+    const L = st.stripeFor === 'row' ? ownYarn(st.selRow) : st.stripeFor, res = C.addChange(st.plan, derive().X, st.selRow, hex, L); push(); st.plan = res.plan; render();
     note('colorNote', res.note || `From row ${st.selRow} up, ${L === 'C' || L === 'D' ? 'carried strand ' + L : 'the ' + L + ' yarn'} is ${hex}.`); }
   document.querySelectorAll('[data-stripe]').forEach(b => b.onclick = () => { st.stripeFor = b.dataset.stripe; document.querySelectorAll('[data-stripe]').forEach(x => x.classList.toggle('on', x === b)); });
   /* Row yarn override: work a row in A or B regardless of parity, or flip from here up. */
@@ -448,7 +493,7 @@
   function addBank(hex) { hex = C.normHex(hex); if (!st.bank.includes(hex)) { st.bank.push(hex); C.saveBank(st.bank); } drawBank(); }
   $('picker').onchange = e => addBank(e.target.value);
   $('addHex').onclick = () => { const v = $('hex').value; if (C.validHex(v)) { addBank(v); $('hex').value = ''; } else note('colorNote', 'Hex should look like #c8102e.'); };
-  $('resetStripes').onclick = () => { for (const L of 'ABCD') st.plan[L] = [st.plan[L][0]]; note('colorNote', 'Stripes removed: one color per letter.'); render(); };
+  $('resetStripes').onclick = () => { push(); for (const L of 'ABCD') st.plan[L] = [st.plan[L][0]]; note('colorNote', 'Stripes removed: one color per letter.'); render(); };
   const dlCanvas = (cv, name) => { const a = document.createElement('a'); a.download = name; a.href = cv.toDataURL('image/png'); a.click(); };
   $('dlChart').onclick = () => { const D = derive(); dlCanvas(Rn.drawChart(D.F, D.X, chartOpts(D, { legend: C.legend(st.plan, D.H, ownYarn).concat(extraLegend(D)) })), 'mosaic_chart.png'); };
   $('dlPrev').onclick = () => { const D = derive(); dlCanvas(Rn.drawPreview(D.X, { rowRGB, chainRGB: C.hexToRgb(C.colorOf(st.plan, 'A', 1)), stitchRGB: stitchRGB(D), lean: leanFn(), bad: D.bad, adviceRows: D.two }), 'mosaic_preview.png'); };
@@ -497,8 +542,22 @@
   window.MosaicApp = {
     /* the board or a saved piece goes straight into the editor */
     openDesign: (rows, hex, groups, msg, yarn, reference) => { if (st.d && st.hist.length && !confirm('Open this in Design? Your current design will be replaced (save it as a piece first if you want to keep it).')) return false;
-      openDesign(rows, hex, groups, msg || 'Opened. Nothing has been changed.', yarn, reference); return true; }
+      return openDesign(rows, hex, groups, msg || 'Opened. Nothing has been changed.', yarn, reference) !== false; }
   };
   window._mosaicState = st; window._mosaicDerive = () => (st.d ? derive() : null);
+  workspace = window.MosaicWorkspace.create({
+    getSnapshot: () => st.d ? { version: 1, design: JSON.parse(JSON.stringify(st.d)), plan: JSON.parse(JSON.stringify(st.plan)), ui: { zoom: st.zoom, pan: st.pan, pane: st.pane, interaction: st.interaction, tool: st.tool, showX: st.showX, fixNear: st.fixNear, fixCarry: st.fixCarry, tab: st.tab, selRow: st.selRow } } : null,
+    loadSnapshot: saved => {
+      st.d = saved.design; st.d.reference = validReference(st.d.reference); st.plan = toPlan(saved.plan);
+      const ui = saved.ui || {}; st.zoom = Math.max(1, Math.min(8, +ui.zoom || 1)); st.pan = { x: Math.max(0, Math.min(1, +ui.pan?.x || 0)), y: Math.max(0, Math.min(1, +ui.pan?.y || 0)) };
+      st.pane = ui.pane === 'preview' ? 'preview' : 'edit'; st.interaction = ui.interaction === 'pan' ? 'pan' : 'paint'; st.tool = Object.hasOwn(HELP, ui.tool) ? ui.tool : 'B';
+      st.showX = !!ui.showX; st.fixNear = ui.fixNear !== false; st.fixCarry = !!ui.fixCarry; st.tab = ['chart', 'written', 'preview', 'fabric'].includes(ui.tab) ? ui.tab : 'chart'; st.selRow = Number.isInteger(ui.selRow) ? ui.selRow : null;
+      $('showX').checked = st.showX; $('fixNear').checked = st.fixNear; $('fixCarry').checked = st.fixCarry;
+      st.hist = []; st.redo = []; st.sug = []; st.opts = []; st.fixPreview = null; $('optsBox').hidden = true;
+      document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === st.tool));
+      setView('design'); note('dNote', 'Project restored. Your work is saved automatically on this device.');
+    }
+  });
+  window.addEventListener('pagehide', () => workspace.autosave());
   setView('start');
 })();

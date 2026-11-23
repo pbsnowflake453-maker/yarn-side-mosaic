@@ -4,6 +4,10 @@
 <nav class="views" aria-label="Sections"><button data-view="start">Start</button><button data-view="design">Design</button><button data-view="combine">Combine</button></nav>
 <main>
 <div id="startView">
+<section id="projectsSection"><h2>Your projects</h2>
+ <div class="row"><button id="resumeProject" hidden>Continue where you left off</button><label>Saved projects <select id="projectList" aria-label="Saved projects"></select></label><button class="sec" id="openProject" disabled>Open project</button></div>
+ <p class="small" id="projectNote">Projects are saved on this device as you work.</p>
+</section>
 <section><h2>Start from a picture</h2>
  <p class="small">Upload pixel art, check the grid, and pick a letter for each color. Then tap <b>Start designing</b>. You only do this once per picture; everything else happens in Design. To open a saved piece or a board instead, go to Combine.</p>
  <div class="row"><input type="file" id="file" accept="image/*"></div>
@@ -29,17 +33,24 @@
 </div>
 <div id="designView" hidden>
 <section>
+ <div class="projectBar"><label>Project name <input id="projectName" type="text" maxlength="80" placeholder="Untitled design"></label><button class="sec" id="copyProject">Save as new project</button><span class="small" id="saveStatus" role="status" aria-live="polite"></span></div>
  <div class="designHeader"><div class="dHead"><h2>Design</h2><span class="small" id="dSize"></span></div><figure class="designReference" id="designReference" hidden><img id="designReferenceImg" alt="Original image for reference"><figcaption class="small" id="designReferenceLabel">Original image</figcaption></figure></div>
  <div class="tools">
-  <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D"><i class="dot"></i>D</button><button class="sec" data-tool="cycle" title="Tap to cycle A→B→C→D">Cycle</button><button class="sec" data-tool="keep">Keep</button><button class="sec" data-tool="unkeep">Un-keep</button></div>
+  <div class="row"><span class="small lab">Paint</span><button class="sec lt on" data-tool="B" title="Paint contrast color B"><i class="dot"></i>B</button><button class="sec lt" data-tool="A" title="Paint background color A"><i class="dot"></i>A</button><button class="sec lt" data-tool="C" title="Paint carried color C"><i class="dot"></i>C</button><button class="sec lt" data-tool="D" title="Paint carried color D"><i class="dot"></i>D</button><button class="sec on" id="paintMode" aria-pressed="true">Paint</button><button class="sec" id="panMode" aria-pressed="false">Move view</button></div>
+  <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button class="sec" id="dRedo" disabled>Redo</button><button id="dFix" disabled>Review fix</button><span class="zoom"><button class="sec" id="dOut" title="Zoom out" aria-label="Zoom out">&minus;</button><button class="sec" id="dIn" title="Zoom in" aria-label="Zoom in">+</button><button class="sec" id="dFit">Fit design</button></span><button class="sec" id="quickPreview">Simulation</button></div>
+  <details id="advancedTools"><summary>More editing tools</summary>
+  <div class="row"><button class="sec" data-tool="cycle" title="Tap to cycle A→B→C→D">Cycle colors</button><button class="sec" data-tool="keep">Protect pixels</button><button class="sec" data-tool="unkeep">Remove protection</button></div>
   <div class="row"><span class="small lab">Lean</span><button class="sec gsym" data-tool="g1" title="2 dc in next st then sk 1">\|</button><button class="sec gsym" data-tool="g2" title="sk 1 then 2 dc in next st">|/</button><button class="sec gsym" data-tool="g3" title="sk 1 then 3 dc in next st then sk 1">\|/</button><button class="sec" data-tool="g0">No lean</button><label class="small chk"><input type="checkbox" id="showX"> Show X's</label></div>
-  <div class="row"><button class="sec" id="dUndo" disabled>Undo</button><button id="dFix" disabled>Fix</button><button class="sec" id="dSuggestLeans">Suggest leans</button><button class="sec" id="dOpts">More fix options</button><span class="zoom"><button class="sec" id="dOut" title="Smaller">&minus;</button><button class="sec" id="dIn" title="Bigger">+</button></span></div>
+  <div class="row"><button class="sec" id="dSuggestLeans">Suggest leans</button><button class="sec" id="dOpts">More fix options</button></div>
   <div class="row sugBox" id="sugBox" hidden><span class="small lab">Leans</span><span class="small" id="sugNote"></span><button class="sec" id="sugAll">Add all</button><button class="sec" id="sugHide">Hide</button></div>
   <div class="row fixSet"><span class="small lab">Fix may</span><label class="small chk"><input type="checkbox" id="fixNear" checked> use a C / D color a square touches</label><label class="small chk"><input type="checkbox" id="fixCarry"> carry a strand to keep the picture as drawn</label></div>
+  </details>
  </div>
  <p class="small dnote" id="dNote"></p>
- <div class="out" id="dWrap"><canvas id="dCv"></canvas></div>
- <p class="small edLegend"><span class="k bad"></span>can't be crocheted as shown <span class="k mine"></span>keep exactly <span class="k auto"></span>changed by Fix <span class="k carryAdvice">2</span>both C + D carried (preference only)</p>
+ <div class="workspaceSwitch" aria-label="Design view"><button class="sec on" id="showEditor" aria-pressed="true">Pixel editor</button><button class="sec" id="showSimulation" aria-pressed="false">Simulation</button></div>
+ <div class="editWorkspace" id="editWorkspace" data-mode="edit"><div class="out canvasViewport" id="dWrap" aria-label="Editable pixel grid"><canvas id="dCv"></canvas></div><aside class="simulationPane"><h3>Simulation</h3><div class="out canvasViewport" id="livePreviewWrap" aria-label="Simulated crochet"><canvas id="livePreviewCv"></canvas></div><p class="small">Updates as you edit. Drag to move the view.</p></aside></div>
+ <p class="small edLegend"><span class="k bad"></span>stitch error <span class="k mine"></span>protected pixel <span class="k auto"></span>changed by Fix <span class="k carryAdvice">2</span>both C + D carried (preference only)</p>
+ <details class="editingHelp"><summary>Editing help</summary><p>Use Paint to change squares. Choose Move view to drag around without marking the design. Fit design shows the whole picture. Simulation shows how the stitches will look.</p><p>Protect pixels asks Fix to preserve those squares. Review fix shows the proposed changes before you apply them, including any protected squares that cannot stay. Red marks are stitch errors; blue row markers are preferences.</p></details>
  <div class="optsBox" id="optsBox" hidden><div class="row"><b>Fix options</b><span class="small" id="optsNote"></span><button class="sec" id="optsClose">Close</button></div><div class="cands" id="opts"></div></div>
  <details class="sizeBox"><summary>Rows &amp; columns</summary>
   <div class="row"><span class="small lab">Top</span><button class="sec" data-rows="top,1">+ row</button><button class="sec" data-rows="top,-1">− row</button><span class="small lab">Bottom</span><button class="sec" data-rows="bottom,2">+ 2 rows</button><button class="sec" data-rows="bottom,-2">− 2 rows</button></div>
@@ -52,7 +63,7 @@
  <div class="row"><button class="sec" id="saveDesign">Save design as piece</button><button id="mkPdf">Make pattern PDF</button></div>
 </section>
 <section>
- <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Design preview</button><button data-tab="fabric">Fabric</button></nav>
+ <nav class="tabs" aria-label="Outputs"><button data-tab="chart">Chart</button><button data-tab="written">Written rows</button><button data-tab="preview">Simulation image</button><button data-tab="fabric">Finished color map</button></nav>
  <p class="small" id="summary"></p>
  <p class="small carryAdvice" id="carryLegend" hidden><b>2 at the row edge</b> = both C and D carried (preference only). Red cell outlines = stitch errors.</p>
  <div id="chartTab"><div class="row"><button class="sec" id="dlChart">Download chart PNG</button></div>
@@ -79,23 +90,32 @@
  <div class="row"><label class="small">Width <input type="number" id="bw" min="4" max="400" value="40"></label><label class="small">Rows <input type="number" id="bh" min="4" max="400" value="30"></label>
   <button class="sec" id="bFit">Fit to pieces</button><button class="sec" id="bClear">Clear board</button><span class="zoom"><button class="sec" id="bOut" title="Smaller">&minus;</button><button class="sec" id="bIn" title="Bigger">+</button></span></div>
  <label class="small chk"><input type="checkbox" id="keepRows" checked> Keep design pieces on their row pattern (they move up and down 2 rows at a time, so they stay crochetable as they are)</label>
- <div class="boardWrap"><canvas id="boardCv"></canvas></div>
- <div class="selBox" id="selBox" hidden>
+ <div class="combineWorkspace"><div class="boardWrap"><canvas id="boardCv"></canvas></div>
+ <aside class="selBox" id="selBox" hidden>
   <div class="small"><b id="selName"></b> <span id="selInfo"></span></div>
   <div class="row"><span class="small lab">Move</span><button class="sec" data-mv="-1,0" title="Left">←</button><button class="sec" data-mv="0,-1" title="Up">↑</button><button class="sec" data-mv="0,1" title="Down">↓</button><button class="sec" data-mv="1,0" title="Right">→</button></div>
   <div class="row"><span class="small lab">Crop</span><button class="sec" data-crop="t,1">top −</button><button class="sec" data-crop="t,-1">top +</button><button class="sec" data-crop="b,1">bottom −</button><button class="sec" data-crop="b,-1">bottom +</button></div>
   <div class="row"><span class="small lab"></span><button class="sec" data-crop="l,1">left −</button><button class="sec" data-crop="l,-1">left +</button><button class="sec" data-crop="r,1">right −</button><button class="sec" data-crop="r,-1">right +</button></div>
   <div class="row" id="pLetters"></div>
   <div class="row"><button class="sec" id="pMirror">Mirror ↔</button><button class="sec" id="pFront">Bring to front</button><button class="sec" id="pBack">Send to back</button><button class="sec" id="pDup">Duplicate</button><button class="sec" id="pClear"></button><button class="sec" id="pDel">Remove</button></div>
-  <div class="row"><button id="pTile">Auto-tile board</button><button class="sec" id="pUndoTile" disabled>Undo tiling</button><span class="small">Repeat this piece in the free space using whole copies.</span></div>
+  <div class="row"><button id="pTile">Auto-tile board</button><button class="sec" id="pUndoTile" disabled>Undo layout</button><button class="sec" id="pCenter">Center piece</button></div>
+  <details class="repeatTools"><summary>Arrange repeats</summary>
+   <div class="row"><label>Across <input type="number" id="tileAcross" min="1" max="50" value="3"></label><label>Down <input type="number" id="tileDown" min="1" max="50" value="3"></label></div>
+   <div class="row"><label>Column gap <input type="number" id="tileGapX" min="0" max="100" value="0"></label><label>Row gap <input type="number" id="tileGapY" min="0" max="100" value="0"></label></div>
+   <label class="chk"><input type="checkbox" id="tileCenter" checked> Center the repeat layout</label>
+   <p class="small">Gaps are measured in grid squares and also apply to Auto-tile. Keep row pattern may add a spacer row.</p>
+   <button class="sec" id="pPreviewLayout">Preview repeat layout</button>
+  </details>
+  <div class="row" id="layoutActions" hidden><button id="pApplyLayout">Apply layout</button><button class="sec" id="pCancelLayout">Cancel preview</button></div>
   <p class="small" id="tileNote" role="status" aria-live="polite"></p>
-  <p class="small" id="selNote"></p></div>
+  <p class="small" id="selNote"></p></aside></div>
  <div class="colorBox" id="colorBox" hidden></div>
  <div class="row"><button id="useBoard">Open board in Design</button><span class="small" id="boardNote"></span></div>
 </section>
 </div>
 </main>
 <footer class="shop">Shop patterns: <a href="https://www.ravelry.com/designers/the-yarn-side" target="_blank" rel="noopener">The Yarn Side on Ravelry</a></footer>
+<dialog id="fixDlg" class="fixDialog" aria-labelledby="fixHeading"><h2 id="fixHeading">Review proposed fix</h2><p id="fixSummary" role="status"></p><div class="fixComparison"><div><h3>Current design</h3><div class="out" id="fixBefore"></div></div><div><h3>Proposed design</h3><div class="out" id="fixAfter"></div></div></div><p class="small">Orange outlines mark changed squares. Your design changes only when you choose Apply fix.</p><div class="row"><button id="fixApply">Apply fix</button><button class="sec" id="fixCancel">Keep current design</button></div></dialog>
 <dialog id="pdfDlg"><form method="dialog" id="pdfForm"><h2>Make pattern PDF</h2>
  <label>Title <b>*</b><br><input type="text" id="pdfTitle" required maxlength="60" placeholder="e.g. Peekaboo Kitty"></label>
  <p class="small">Color names (optional). Leave blank to use the labels shown.</p><div id="pdfColors"></div>
@@ -105,4 +125,4 @@
  <label id="pdfBorderWrap">Border / joining color<br><select id="pdfBorder"><option value="A">Same as Color A</option><option value="B">Same as Color B</option><option value="C">Its own color</option></select></label>
  <p class="small">Size is estimated for worsted (#4) yarn and an H (5.0 mm) hook at 15 sts x 15 rows = 4".</p>
  <div class="row"><button type="submit" id="pdfGo" value="go">Make PDF</button><button type="button" class="sec" id="pdfCancel">Cancel</button><span class="small" id="pdfNote"></span></div></form></dialog><script src="engine.js"></script><script src="render.js"></script><script src="colors.js"></script><script src="written.js"></script><script src="vendor/jspdf.umd.min.js"></script><script src="pdf.js"></script><script src="combine.js"></script>
-<script src="app.js"></script></body></html>
+<script src="workspace.js"></script><script src="app.js"></script></body></html>

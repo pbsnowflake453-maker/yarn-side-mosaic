@@ -18,11 +18,22 @@ const shot = async (p, name) => { if (OUT) { fs.mkdirSync(OUT, { recursive: true
   await p.waitForFunction(() => document.getElementById('detect').textContent.includes('Detected'));
   for (const scale of [5, 6, 9]) assert.ok(await p.isVisible(`[data-s="${scale}"]`));
   await p.click('#auto4Btn'); await p.click('#startDesign'); await p.waitForSelector('#designView:not([hidden])');
-  await p.click('#dFix'); assert.match(await p.textContent('#dNote'), /Fixed/);
+  await p.click('#dFix'); assert.ok(await p.isVisible('#fixDlg')); await p.click('#fixApply'); assert.match(await p.textContent('#dNote'), /Fixed/);
+
+  // Named autosave restores the complete editable design after a reload.
+  await p.fill('#projectName', 'Browser heart'); await p.click('#dFit');
+  const savedDesign = await p.evaluate(() => JSON.stringify(window._mosaicState.d));
+  await p.reload(); await p.click('#resumeProject');
+  assert.equal(await p.inputValue('#projectName'), 'Browser heart');
+  assert.equal(await p.evaluate(() => JSON.stringify(window._mosaicState.d)), savedDesign);
+  await p.click('#showSimulation'); assert.ok(await p.isVisible('#livePreviewWrap')); assert.ok(!(await p.isVisible('#dWrap')));
+  await p.click('#dIn'); const savedZoom = await p.evaluate(() => window._mosaicState.zoom);
+  await p.click('#showEditor'); assert.equal(await p.evaluate(() => window._mosaicState.zoom), savedZoom);
+  await p.click('#dFit'); await shot(p, 'workspace');
 
   // Suggest leans: shows spots, adds nothing until asked
   const G0 = await p.evaluate(() => JSON.stringify(window._mosaicState.d.G));
-  await p.click('#dSuggestLeans'); const nSug = await p.evaluate(() => window._mosaicState.sug.length);
+  await p.click('#advancedTools summary'); await p.click('#dSuggestLeans'); const nSug = await p.evaluate(() => window._mosaicState.sug.length);
   assert.ok(nSug > 0, 'some spots suggested'); assert.equal(await p.evaluate(() => JSON.stringify(window._mosaicState.d.G)), G0, 'nothing added yet');
   assert.ok(await p.isVisible('#sugBox')); await shot(p, 'suggest');
   // tap the first suggested spot on the editor
@@ -50,7 +61,7 @@ const shot = async (p, name) => { if (OUT) { fs.mkdirSync(OUT, { recursive: true
   const cw = await p.$eval('#chartCv', c => c.width); assert.ok(cw < 700);
 
   // PDF
-  if (!(await p.isDisabled('#dFix'))) await p.click('#dFix');
+  if (!(await p.isDisabled('#dFix'))) { await p.click('#dFix'); await p.click('#fixApply'); }
   await p.click('#mkPdf'); await p.fill('#pdfTitle', 'Smoke Heart');
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('#pdfGo')]); assert.ok(dl);
   if (OUT) await dl.saveAs(path.join(OUT, 'smoke.pdf'));

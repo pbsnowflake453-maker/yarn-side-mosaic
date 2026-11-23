@@ -6,8 +6,8 @@
   const LIB = 'yarnside.pieces.v1', BOARD = 'yarnside.board.v1';
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } };
   const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full or blocked: keep working in memory */ } };
-  const st = { lib: load(LIB, []), board: load(BOARD, { w: 40, h: 30, items: [] }), sel: -1, zoom: 1, drag: null, tileUndo: null, tileMessage: '' };
-  const saveAll = () => { st.tileUndo = null; st.tileMessage = ''; store(LIB, st.lib); store(BOARD, st.board); };
+  const st = { lib: load(LIB, []), board: load(BOARD, { w: 40, h: 30, items: [] }), sel: -1, zoom: 1, drag: null, tileUndo: null, tileMessage: '', layoutPreview: null };
+  const saveAll = () => { st.tileUndo = null; st.tileMessage = ''; st.layoutPreview = null; store(LIB, st.lib); store(BOARD, st.board); };
   const piece = id => st.lib.find(p => p.id === id);
   const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -46,7 +46,7 @@
      A / B squares ask the row yarn that shows there (a square in the other row's color is the dc from the row above),
      C / D squares ask their own row's strand. Different pieces asking one yarn for different colors on the same row
      is a question for you (board.choices); so is a row that would carry both C and D. */
-  function compose() { const { w, h, items } = st.board, G = [...Array(h)].map(() => new Array(w).fill('A')), own = [...Array(h)].map(() => new Array(w).fill(-1)), col = [...Array(h)].map(() => new Array(w).fill(null)); let groups = [];
+  function compose(board = st.board) { const { w, h, items } = board, G = [...Array(h)].map(() => new Array(w).fill('A')), own = [...Array(h)].map(() => new Array(w).fill(-1)), col = [...Array(h)].map(() => new Array(w).fill(null)); let groups = [];
     const touches = (g, by, bx) => (by === g[0] || by === g[0] + 1) && bx >= g[1] - 1 && bx <= g[1] + 1;
     items.forEach((it, ii) => { const p = piece(it.pid); if (!p) return; const d = dims(it), Wf = fullW(p), Hf = fullH(p);
       for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) { const by = it.y + y, bx = it.x + x; if (by < 0 || bx < 0 || by >= h || bx >= w) continue;
@@ -68,7 +68,7 @@
         if (!wants.has(L)) wants.set(L, []); wants.get(L).push(ii);
       }
       if (!wants.size) continue;
-      const key = `yarn:${R}`, choice = (st.board.choices || {})[key];
+      const key = `yarn:${R}`, choice = (board.choices || {})[key];
       if (wants.size > 1 && !wants.has(choice)) yarnConflicts.push({ row: R, key, opts: [...wants].map(([L, items]) => ({ L, items })) });
       yarn[R - 1] = wants.has(choice) ? choice : wants.keys().next().value;
     }
@@ -78,7 +78,7 @@
     for (let by = 0; by < h; by++) for (let bx = 0; bx < w; bx++) { const ii = own[by][bx]; if (ii < 0) continue; const L = G[by][bx], R = h - by;
       const Q = L === 'C' || L === 'D' ? R : yarnOf(R) === L || R + 1 > h ? R : R + 1;
       const m = ask[L][Q] = ask[L][Q] || new Map(); if (!m.has(col[by][bx])) m.set(col[by][bx], new Set()); m.get(col[by][bx]).add(ii); }
-    const rows = { A: {}, B: {}, C: {}, D: {} }, open = new Map(), ch = st.board.choices || {};
+    const rows = { A: {}, B: {}, C: {}, D: {} }, open = new Map(), ch = board.choices || {};
     for (const L of 'ABCD') for (const Q of Object.keys(ask[L]).map(Number).sort((a, b) => a - b)) { const m = ask[L][Q], hexes = [...m.keys()].sort();
       if (hexes.length === 1) { rows[L][Q] = hexes[0]; continue; }
       const key = L + ':' + hexes.join(','); if (hexes.includes(ch[key])) { rows[L][Q] = ch[key]; continue; }
@@ -100,7 +100,8 @@
   function cellSize() { const wrap = $('boardCv').parentElement, avail = Math.max(200, (wrap.clientWidth || 600) - M - 4);
     return Math.max(3, Math.min(26, Math.floor(avail / st.board.w))) * st.zoom; }
   function draw() {
-    const { w, h, items } = st.board, k = Math.max(3, Math.round(cellSize())), cv = $('boardCv'), B = compose(), G = B.G;
+    const displayed = st.layoutPreview ? st.layoutPreview.board : st.board;
+    const { w, h, items } = displayed, k = Math.max(3, Math.round(cellSize())), cv = $('boardCv'), B = compose(displayed), G = B.G;
     cv.width = M + w * k + 2; cv.height = M + h * k + 2; cv._k = k; const g = cv.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { g.fillStyle = B.col[y][x] || Cl().colorOf(B.plan, 'A', h - y); g.fillRect(M + x * k, M + y * k, k, k); }
@@ -111,14 +112,15 @@
     g.fillStyle = '#6b625a'; g.font = '10px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     for (let x = 0; x < w; x++) { const n = w - x; if (n === 1 || n % 5 === 0) g.fillText(String(n), M + x * k + k / 2, M / 2); }
     g.textAlign = 'right'; for (let y = 0; y < h; y++) { const n = h - y; if (n === 1 || n % 5 === 0) g.fillText(String(n), M - 3, M + y * k + k / 2); }
-    items.forEach((it, i) => { if (!piece(it.pid)) return; const d = dims(it), sel = i === st.sel, ok = rowsOK(it);
+    items.forEach((it, i) => { if (!piece(it.pid)) return; const d = dims(it), sel = !st.layoutPreview && i === st.sel, ok = rowsOK(it);
       g.setLineDash(sel ? [] : [4, 3]); g.lineWidth = sel ? 3 : 1.5; g.strokeStyle = sel ? '#125765' : ok ? 'rgba(18,87,101,.6)' : '#d06a00';
       g.strokeRect(M + it.x * k + 1, M + it.y * k + 1, d.w * k - 1, d.h * k - 1); g.setLineDash([]);
       if (!ok) { g.fillStyle = '#d06a00'; g.font = 'bold 12px system-ui, sans-serif'; g.textAlign = 'left'; g.fillText('⚠', M + it.x * k + 3, M + it.y * k + 9); } });
     const n = items.filter(it => piece(it.pid)).length, off = items.filter(it => piece(it.pid) && !rowsOK(it)).length;
     $('boardNote').innerHTML = !n ? 'Add pieces from My pieces above.' : off ? `<span class="warn">${off} design piece${off > 1 ? 's are' : ' is'} off its row pattern (orange).</span> It still works, but it may need Fix in a few more places.` : '';
-    $('useBoard').disabled = !n; $('bw').value = w; $('bh').value = h;
-    drawColors(B); drawSel();
+    if (st.layoutPreview) $('boardNote').textContent = 'Layout preview: apply it or cancel to keep the current board.';
+    $('useBoard').disabled = !n || !!st.layoutPreview; $('bw').value = w; $('bh').value = h;
+    if (st.layoutPreview) $('colorBox').hidden = true; else drawColors(B); drawSel();
   }
   /* questions about colors and strands */
   function drawColors(B) { const box = $('colorBox'); box.innerHTML = ''; const name = ii => (piece(st.board.items[ii].pid) || {}).name || 'piece';
@@ -143,6 +145,7 @@
     box.hidden = !B.conflicts.length && !B.strand.length && !B.yarnConflicts.length; }
   function drawSel() { const it = st.board.items[st.sel], box = $('selBox'); box.hidden = !it; if (!it) return;
     $('pUndoTile').disabled = !st.tileUndo; $('tileNote').textContent = st.tileMessage;
+    $('layoutActions').hidden = !st.layoutPreview;
     const p = piece(it.pid), d = dims(it); $('selName').textContent = p.name;
     // which letter each of the piece's colors uses on this board
     const lb = $('pLetters'); lb.innerHTML = '<span class="small lab">Letters</span>'; const pl = pplan(p);
@@ -175,11 +178,43 @@
       card.append(cv, name, info, btns); box.appendChild(card); }); }
 
   /* ---------- editing ---------- */
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const inputNumber = (id, fallback, max) => { const value = Number($(id).value); return Number.isFinite(value) ? Math.max(0, Math.min(max, Math.floor(value))) : fallback; };
+  const gap = (id) => inputNumber(id, 0, 100);
+  function aligned(it) { const p = piece(it.pid); return $('keepRows').checked && p.kind === 'chart' && !(p.yarn && p.yarn.some(Boolean)); }
+  function commitLayout(board, sel, message) { const undo = { board: clone(st.board), sel: st.sel }; st.board = board; st.sel = sel; saveAll(); st.tileUndo = undo; st.tileMessage = message; draw(); }
+  function previewLayout() {
+    const b = st.board, source = b.items[st.sel]; if (!source || !piece(source.pid)) return;
+    st.layoutPreview = null;
+    const across = Math.max(1, inputNumber('tileAcross', 3, 50)), down = Math.max(1, inputNumber('tileDown', 3, 50)), d = dims(source);
+    const gx = gap('tileGapX'), gy = gap('tileGapY') + (aligned(source) ? (d.h + gap('tileGapY')) % 2 : 0);
+    const width = across * d.w + (across - 1) * gx, height = down * d.h + (down - 1) * gy;
+    const fail = message => { st.tileMessage = message; draw(); };
+    if (width > b.w || height > b.h) return fail(`This layout needs ${width} columns × ${height} rows. Enlarge the board or reduce the repeats or gaps.`);
+    if (across * down + b.items.length - 1 > 2000) return fail('This layout would exceed 2,000 pieces. Reduce the repeat counts.');
+    const centered = $('tileCenter').checked;
+    const x0 = centered ? Math.floor((b.w - width) / 2) : Math.max(0, Math.min(source.x, b.w - width));
+    let y0 = centered ? Math.floor((b.h - height) / 2) : Math.max(0, Math.min(source.y, b.h - height));
+    if (aligned(source) && !rowsOK({ ...source, y: y0 })) { if (y0 + height < b.h) y0++; else if (y0 > 0) y0--; else return fail('Add one board row to preserve the selected design’s A/B row pattern.'); }
+    const copies = [];
+    for (let y = 0; y < down; y++) for (let x = 0; x < across; x++) copies.push({ ...clone(source), x: x0 + x * (d.w + gx), y: y0 + y * (d.h + gy) });
+    const others = b.items.filter((_, i) => i !== st.sel);
+    if (copies.some(cp => others.some(it => { if (!piece(it.pid)) return false; const size = dims(it); return cp.x < it.x + size.w && cp.x + d.w > it.x && cp.y < it.y + size.h && cp.y + d.h > it.y; }))) return fail('This layout would overlap another piece. Move that piece or change the repeat layout.');
+    st.layoutPreview = { before: JSON.stringify(b), board: { ...clone(b), items: [...clone(others), ...copies] }, sel: others.length };
+    st.tileMessage = `Preview: ${across} across × ${down} down (${copies.length} copies), replacing the selected piece.` + (gy !== gap('tileGapY') ? ' A spacer row preserves A/B alignment.' : '');
+    draw();
+  }
+  function centerSelected() { const it = st.board.items[st.sel]; if (!it || !piece(it.pid)) return; const d = dims(it), b = clone(st.board), next = b.items[st.sel];
+    if (d.w > b.w || d.h > b.h) { st.tileMessage = 'Enlarge the board before centering this piece.'; drawSel(); return; }
+    next.x = Math.floor((b.w - d.w) / 2); next.y = Math.floor((b.h - d.h) / 2);
+    if (aligned(it) && !rowsOK(next)) { if (next.y + d.h < b.h) next.y++; else if (next.y > 0) next.y--; else { st.tileMessage = 'Add one board row before centering to preserve A/B alignment.'; drawSel(); return; } }
+    commitLayout(b, st.sel, 'Centered the selected piece. Undo layout restores its position.'); }
   function tileSelected() {
     const b = st.board, it = b.items[st.sel]; if (!it || !piece(it.pid)) return;
     const d = dims(it), p = piece(it.pid), keep = $('keepRows').checked && p.kind === 'chart' && !(p.yarn && p.yarn.some(Boolean));
     if (keep && !rowsOK(it)) { st.tileMessage = 'Move this piece onto its row pattern before tiling.'; drawSel(); return; }
-    const stepX = d.w, stepY = d.h + (keep ? d.h % 2 : 0), mod = (v, n) => ((v % n) + n) % n;
+    const stepX = d.w + gap('tileGapX'), requestedGapY = gap('tileGapY'), spacer = keep ? (d.h + requestedGapY) % 2 : 0;
+    const stepY = d.h + requestedGapY + spacer, mod = (v, n) => ((v % n) + n) % n;
     // Mark existing pieces once; tiling never overwrites or duplicates an occupied area.
     const occupied = Array.from({ length: b.h }, () => new Uint8Array(b.w));
     b.items.forEach(item => { if (!piece(item.pid)) return; const size = dims(item);
@@ -195,7 +230,7 @@
     const before = JSON.parse(JSON.stringify(b)), sel = st.sel;
     spots.forEach(({ x, y }) => b.items.push({ ...JSON.parse(JSON.stringify(it)), x, y }));
     saveAll(); st.tileUndo = { board: before, sel };
-    st.tileMessage = `Added ${spots.length} ${spots.length === 1 ? 'copy' : 'copies'}.` + (stepY > d.h ? ' A spacer row between repeats keeps the A/B row pattern.' : '');
+    st.tileMessage = `Added ${spots.length} ${spots.length === 1 ? 'copy' : 'copies'}.` + (spacer ? ' A spacer row between repeats keeps the A/B row pattern.' : '');
     draw();
   }
   function addItem(p) { const crop = trimmed(p), it = { pid: p.id, x: 0, y: 0, crop, flip: false, clear: true }, d = dims(it), b = st.board;
@@ -222,7 +257,7 @@
   function hit(x, y) { for (let i = st.board.items.length - 1; i >= 0; i--) { const it = st.board.items[i]; if (!piece(it.pid)) continue; const d = dims(it);
     if (x >= it.x && x < it.x + d.w && y >= it.y && y < it.y + d.h) return i; } return -1; }
   function bindPointer() { const c = cv();
-    c.onpointerdown = e => { const [x, y] = cellAt(e), i = hit(x, y); st.sel = i; draw(); if (i < 0) return;
+    c.onpointerdown = e => { st.layoutPreview = null; const [x, y] = cellAt(e), i = hit(x, y); st.sel = i; draw(); if (i < 0) return;
       e.preventDefault(); c.setPointerCapture(e.pointerId); const it = st.board.items[i]; st.drag = { i, ox: x - it.x, oy: y - it.y }; };
     c.onpointermove = e => { if (!st.drag) return; const [x, y] = cellAt(e), it = st.board.items[st.drag.i]; let nx = x - st.drag.ox, ny = y - st.drag.oy;
       if (nx === it.x && ny === it.y) return; const px = it.x, py = it.y; it.x = nx; it.y = ny;
@@ -243,6 +278,13 @@
     $('pDup').onclick = () => { const b = st.board, it = b.items[st.sel]; if (!it) return; const d = dims(it), cp = JSON.parse(JSON.stringify(it));
       cp.x = Math.min(it.x + d.w, Math.max(0, b.w - d.w)); if (cp.x === it.x) cp.y = Math.min(it.y + 2, Math.max(0, b.h - d.h)); b.items.push(cp); st.sel = b.items.length - 1; saveAll(); draw(); };
     $('pTile').onclick = tileSelected;
+    $('pCenter').onclick = centerSelected;
+    $('pPreviewLayout').onclick = previewLayout;
+    $('pCancelLayout').onclick = () => { st.layoutPreview = null; st.tileMessage = 'Layout preview canceled. The board is unchanged.'; draw(); };
+    $('pApplyLayout').onclick = () => { const preview = st.layoutPreview; if (!preview) return;
+      if (preview.before !== JSON.stringify(st.board)) { st.layoutPreview = null; st.tileMessage = 'The board changed. Preview the layout again.'; draw(); return; }
+      commitLayout(preview.board, preview.sel, 'Repeat layout applied. Undo layout restores the previous board.'); };
+    ['tileAcross', 'tileDown', 'tileGapX', 'tileGapY', 'tileCenter', 'keepRows'].forEach(id => { $(id).onchange = () => { if (st.layoutPreview) previewLayout(); }; });
     $('pUndoTile').onclick = () => { const undo = st.tileUndo; if (!undo) return; st.board = undo.board; st.sel = undo.sel; saveAll(); st.tileMessage = 'Tiling undone.'; draw(); };
     $('pClear').onclick = () => { const it = st.board.items[st.sel]; if (!it) return; it.clear = !it.clear; saveAll(); draw(); };
     $('pDel').onclick = () => { if (st.sel < 0) return; st.board.items.splice(st.sel, 1); st.sel = -1; saveAll(); draw(); };
