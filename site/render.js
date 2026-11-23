@@ -147,9 +147,12 @@
   }
 
   function drawPreview(X, opts = {}) {
-    const H = X.length, W = X[0].length, n = W + 2, cw = opts.cw || 28, rh = opts.rh || 25, pad = 30;
+    // Calibrated against Samantha's finished 28-stitch, 21-row sloth sample
+    // (excluding her extra top sc row). Rows are about 80% of a stitch's width.
+    // Keep this in the shared renderer so the preview, PNG and PDF agree.
+    const H = X.length, W = X[0].length, n = W + 2, cw = opts.cw || 28, rh = opts.rh || cw * .8, pad = 30;
     const advice = opts.adviceRows && opts.adviceRows.length;
-    const cv = mk(n * cw + 2 * pad, (H + 1) * rh + 2 * pad + (advice ? 18 : 0)), g = cv.getContext('2d');
+    const cv = mk(n * cw + 2 * pad, Math.ceil((H + 1) * rh + 2 * pad + (advice ? 18 : 0))), g = cv.getContext('2d');
     let s = 7; const R = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
     const yarn = [opts.a || [238, 232, 220], opts.b || [34, 34, 38]], rowRGB = opts.rowRGB || (r => yarn[color(r)]), sh = (c, f) => css(c.map(v => Math.max(0, Math.min(255, v * f))));
     g.fillStyle = '#cdc4b6'; g.fillRect(0, 0, cv.width, cv.height);
